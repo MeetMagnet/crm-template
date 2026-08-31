@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ContactStatut {
+  lead
+  contacte
+  rdv
+  client
+  perdu
+}
+
+enum ActionType {
+  note
+  appel
+  email
+  rendez_vous
+  autre
+}
+
+enum ActionStatut {
+  a_faire
+  en_cours
+  termine
+}
+
+model Company {
+  id        String    @id @default(cuid())
+  nom       String
+  email     String?
+  telephone String?
+  adresse   String?
+  siteWeb   String?
+  notes     String?
+  contacts  Contact[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Contact {
+  id        String        @id @default(cuid())
+  nom       String
+  email     String?
+  telephone String?
+  statut    ContactStatut @default(lead)
+  companyId String?
+  company   Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actions   Action[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([statut])
+  @@index([companyId])
+  @@index([nom])
+}
+
+model Action {
+  id              String       @id @default(cuid())
+  contactId       String
+  contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type            ActionType
+  titre           String
+  contenu         String       @default("")
+  statut          ActionStatut @default(a_faire)
+  datePrevue      DateTime?
+  dateRealisation DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([contactId])
+  @@index([statut])
+}

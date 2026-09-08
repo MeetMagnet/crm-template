@@ -1,56 +1,12 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { listCompanies } from "@/lib/companies";
+import { CompaniesWorkspace } from "./companies-workspace";
 
-export default async function CompaniesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  const params = await searchParams;
-  const companies = await listCompanies(params.q);
-
+export default async function CompaniesPage() {
+  const companies = await listCompanies();
   return (
-    <>
-      <header className="page-header">
-        <div>
-          <h1>Entreprises</h1>
-          <p>Organisations auxquelles sont rattachés vos contacts.</p>
-        </div>
-        <Link className="btn" href="/companies/nouveau">
-          Nouvelle entreprise
-        </Link>
-      </header>
-
-      <section className="card">
-        {companies.length === 0 ? (
-          <p className="empty">Aucune entreprise pour le moment.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nom</th>
-                  <th>E-mail</th>
-                  <th>Téléphone</th>
-                  <th>Contacts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((company) => (
-                  <tr className="row-link" key={company.id}>
-                    <td>
-                      <Link href={`/companies/${company.id}`}>{company.nom}</Link>
-                    </td>
-                    <td>{company.email ?? "—"}</td>
-                    <td>{company.telephone ?? "—"}</td>
-                    <td>{company._count.contacts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </>
+    <Suspense>
+      <CompaniesWorkspace initialCompanies={companies} />
+    </Suspense>
   );
 }

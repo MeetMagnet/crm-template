@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireMcpAuth } from "@/lib/auth-mcp";
-import { addNote } from "@/lib/actions";
-import { createContact, listContacts, updateContactStatut } from "@/lib/contacts";
-import { isContactStatut } from "@/lib/labels";
+import { addNote, listActions } from "@/lib/actions";
+import { createContact, listContacts, updateContact } from "@/lib/contacts";
+import { PERSON_STATES, isPersonState } from "@/lib/labels";
 
 const PROTOCOL_VERSION = "2024-11-05";
 
@@ -18,16 +18,16 @@ type JsonRpcRequest = {
 const tools = [
   {
     name: "list_contacts",
-    description: "Liste les contacts du CRM, avec recherche optionnelle par nom/email et filtre de statut.",
+    description: "Liste les contacts du CRM, avec recherche et filtres catégorie/état.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Recherche texte (nom, email, téléphone, entreprise)" },
-        statut: {
+        category: {
           type: "string",
-          enum: ["lead", "contacte", "rdv", "client", "perdu"],
-          description: "Filtrer par statut du pipeline",
+          enum: ["lead", "prospect", "client", "ex_clients", "autres"],
         },
+        state: { type: "string", enum: PERSON_STATES },
       },
     },
   },
@@ -37,31 +37,45 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        nom: { type: "string", description: "Nom du contact" },
+        prenom: { type: "string" },
+        nom: { type: "string" },
         email: { type: "string" },
         telephone: { type: "string" },
-        statut: {
+        category: {
           type: "string",
-          enum: ["lead", "contacte", "rdv", "client", "perdu"],
+          enum: ["lead", "prospect", "client", "ex_clients", "autres"],
         },
-        companyId: { type: "string", description: "Identifiant d'entreprise existante" },
+        state: { type: "string", enum: PERSON_STATES },
+        companyId: { type: "string" },
       },
-      required: ["nom"],
     },
   },
   {
-    name: "update_contact_status",
-    description: "Met à jour le statut pipeline d'un contact.",
+    name: "update_contact_state",
+    description: "Met à jour l'état / la catégorie d'un contact (taxonomie MeetMagnet).",
     inputSchema: {
       type: "object",
       properties: {
         contactId: { type: "string" },
-        statut: {
+        state: { type: "string", enum: PERSON_STATES },
+        category: {
           type: "string",
-          enum: ["lead", "contacte", "rdv", "client", "perdu"],
+          enum: ["lead", "prospect", "client", "ex_clients", "autres"],
         },
       },
-      required: ["contactId", "statut"],
+      required: ["contactId"],
+    },
+  },
+  {
+    name: "list_actions",
+    description: "Liste les actions, avec filtres optionnels.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        contactId: { type: "string" },
+        statut: { type: "string", enum: ["a_faire", "en_cours", "termine"] },
+      },
     },
   },
   {
@@ -79,121 +93,123 @@ const tools = [
   },
 ];
 
-export async function POST(request: Request) {
-  const authError = requireMcpAuth(request);
-  if (authError) return authError;
+function ok(id: JsonRpcId | undefined, result: unknown) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result });
+}
 
-  const body = (await request.json().catch(() => null)) as JsonRpcRequest | JsonRpcRequest[] | null;
-  if (!body) {
-    return NextResponse.json(rpcError(null, -32700, "JSON invalide"), { status: 400 });
-  }
-
-  if (Array.isArray(body)) {
-    const results = [];
-    for (const item of body) {
-      results.push(await handleRpc(item));
-    }
-    return NextResponse.json(results);
-  }
-
-  const result = await handleRpc(body);
-  return NextResponse.json(result);
+function fail(id: JsonRpcId | undefined, code: number, message: string) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 }
 
 export async function GET(request: Request) {
-  const authError = requireMcpAuth(request);
-  if (authError) return authError;
+  const auth = requireMcpAuth(request);
+  if (auth) return auth;
   return NextResponse.json({
-    name: "crm-mcp",
-    version: "1.0.0",
+    status: "ok",
     protocolVersion: PROTOCOL_VERSION,
-    tools: tools.map((tool) => tool.name),
+    tools: tools.map((t) => t.name),
   });
 }
 
-async function handleRpc(request: JsonRpcRequest) {
-  const id = request.id ?? null;
-  const method = request.method;
-  const params = (request.params ?? {}) as Record<string, unknown>;
+export async function POST(request: Request) {
+  const auth = requireMcpAuth(request);
+  if (auth) return auth;
 
-  try {
-    switch (method) {
-      case "initialize":
-        return rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "crm-mcp", version: "1.0.0" },
-        });
-      case "notifications/initialized":
-        return rpcResult(id, {});
-      case "ping":
-        return rpcResult(id, {});
-      case "tools/list":
-        return rpcResult(id, { tools });
-      case "tools/call":
-        return rpcResult(id, await callTool(params));
-      default:
-        return rpcError(id, -32601, `Méthode inconnue : ${method ?? ""}`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erreur interne";
-    return rpcError(id, -32000, message);
+  const body = (await request.json().catch(() => null)) as JsonRpcRequest | null;
+  if (!body || body.jsonrpc !== "2.0" || !body.method) {
+    return fail(body?.id, -32600, "Requête JSON-RPC invalide");
   }
-}
 
-async function callTool(params: Record<string, unknown>) {
-  const name = typeof params.name === "string" ? params.name : "";
-  const args = (params.arguments ?? {}) as Record<string, unknown>;
+  const { id, method, params = {} } = body;
 
-  let payload: unknown;
-
-  if (name === "list_contacts") {
-    const query = typeof args.query === "string" ? args.query : undefined;
-    const statut = typeof args.statut === "string" ? args.statut : undefined;
-    payload = await listContacts({ q: query, statut });
-  } else if (name === "create_contact") {
-    if (typeof args.nom !== "string" || args.nom.trim() === "") {
-      throw new Error("Le nom est obligatoire");
-    }
-    const statut = args.statut;
-    payload = await createContact({
-      nom: args.nom,
-      email: typeof args.email === "string" ? args.email : null,
-      telephone: typeof args.telephone === "string" ? args.telephone : null,
-      statut: isContactStatut(statut) ? statut : "lead",
-      companyId: typeof args.companyId === "string" ? args.companyId : null,
+  if (method === "initialize") {
+    return ok(id, {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: { tools: {} },
+      serverInfo: { name: "crm-template", version: "1.0.0" },
     });
-  } else if (name === "update_contact_status") {
-    if (typeof args.contactId !== "string") {
-      throw new Error("contactId est obligatoire");
-    }
-    if (!isContactStatut(args.statut)) {
-      throw new Error("Statut invalide");
-    }
-    payload = await updateContactStatut(args.contactId, args.statut);
-  } else if (name === "add_note") {
-    if (typeof args.contactId !== "string") {
-      throw new Error("contactId est obligatoire");
-    }
-    const titre = typeof args.titre === "string" ? args.titre.trim() : "";
-    if (!titre) {
-      throw new Error("Le titre est obligatoire");
-    }
-    const contenu = typeof args.contenu === "string" ? args.contenu : "";
-    payload = await addNote(args.contactId, titre, contenu);
-  } else {
-    throw new Error(`Outil inconnu : ${name}`);
   }
 
-  return {
-    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-  };
-}
+  if (method === "tools/list") {
+    return ok(id, { tools });
+  }
 
-function rpcResult(id: JsonRpcId, result: unknown) {
-  return { jsonrpc: "2.0", id, result };
-}
+  if (method === "tools/call") {
+    const name = String(params.name ?? "");
+    const args = (params.arguments ?? {}) as Record<string, unknown>;
 
-function rpcError(id: JsonRpcId, code: number, message: string) {
-  return { jsonrpc: "2.0", id, error: { code, message } };
+    try {
+      if (name === "list_contacts") {
+        const contacts = await listContacts({
+          q: typeof args.query === "string" ? args.query : undefined,
+          category: typeof args.category === "string" ? args.category : undefined,
+          state: typeof args.state === "string" ? args.state : undefined,
+        });
+        return ok(id, {
+          content: [{ type: "text", text: JSON.stringify(contacts, null, 2) }],
+        });
+      }
+
+      if (name === "create_contact") {
+        const prenom = String(args.prenom ?? "").trim();
+        const nom = String(args.nom ?? "").trim();
+        if (!prenom && !nom) return fail(id, -32602, "prenom ou nom requis");
+        const contact = await createContact({
+          prenom,
+          nom,
+          email: typeof args.email === "string" ? args.email : null,
+          telephone: typeof args.telephone === "string" ? args.telephone : null,
+          category: args.category as never,
+          state: args.state as never,
+          companyId: typeof args.companyId === "string" ? args.companyId : null,
+        });
+        return ok(id, {
+          content: [{ type: "text", text: JSON.stringify(contact, null, 2) }],
+        });
+      }
+
+      if (name === "update_contact_state") {
+        const contactId = String(args.contactId ?? "");
+        if (!contactId) return fail(id, -32602, "contactId requis");
+        if (args.state !== undefined && !isPersonState(args.state)) {
+          return fail(id, -32602, "state invalide");
+        }
+        const contact = await updateContact(contactId, {
+          state: isPersonState(args.state) ? args.state : undefined,
+          category: args.category as never,
+        });
+        if (!contact) return fail(id, -32004, "Contact introuvable");
+        return ok(id, {
+          content: [{ type: "text", text: JSON.stringify(contact, null, 2) }],
+        });
+      }
+
+      if (name === "list_actions") {
+        const actions = await listActions({
+          q: typeof args.query === "string" ? args.query : undefined,
+          contactId: typeof args.contactId === "string" ? args.contactId : undefined,
+          statut: typeof args.statut === "string" ? args.statut : undefined,
+        });
+        return ok(id, {
+          content: [{ type: "text", text: JSON.stringify(actions, null, 2) }],
+        });
+      }
+
+      if (name === "add_note") {
+        const contactId = String(args.contactId ?? "");
+        const titre = String(args.titre ?? "").trim();
+        if (!contactId || !titre) return fail(id, -32602, "contactId et titre requis");
+        const note = await addNote(contactId, titre, String(args.contenu ?? ""));
+        return ok(id, {
+          content: [{ type: "text", text: JSON.stringify(note, null, 2) }],
+        });
+      }
+
+      return fail(id, -32601, `Outil inconnu: ${name}`);
+    } catch (error) {
+      return fail(id, -32000, error instanceof Error ? error.message : "Erreur outil");
+    }
+  }
+
+  return fail(id, -32601, `Méthode inconnue: ${method}`);
 }

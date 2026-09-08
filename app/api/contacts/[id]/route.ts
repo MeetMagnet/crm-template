@@ -1,55 +1,62 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { deleteContact, getContact, updateContact } from "@/lib/contacts";
-import { isContactStatut } from "@/lib/labels";
+import { isPersonCategory, isPersonState, parseOptionalDate } from "@/lib/labels";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(_request: Request, context: Ctx) {
   const { id } = await context.params;
   const contact = await getContact(id);
-  if (!contact) {
-    return NextResponse.json({ error: "Contact introuvable" }, { status: 404 });
-  }
+  if (!contact) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json(contact);
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function PATCH(request: Request, context: Ctx) {
   const { id } = await context.params;
-  const existing = await getContact(id);
-  if (!existing) {
-    return NextResponse.json({ error: "Contact introuvable" }, { status: 404 });
+  const user = await getSessionUser();
+  const body = await request.json().catch(() => ({}));
+
+  if (body.category !== undefined && body.category !== null && body.category !== "" && !isPersonCategory(body.category)) {
+    return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
+  }
+  if (body.state !== undefined && body.state !== null && body.state !== "" && !isPersonState(body.state)) {
+    return NextResponse.json({ error: "État invalide" }, { status: 400 });
   }
 
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
-  }
+  const contact = await updateContact(
+    id,
+    {
+      prenom: body.prenom,
+      nom: body.nom,
+      email: body.email,
+      telephone: body.telephone,
+      poste: body.poste,
+      linkedinUrl: body.linkedinUrl,
+      description: body.description,
+      adresse: body.adresse,
+      pays: body.pays,
+      source: body.source,
+      category: isPersonCategory(body.category) ? body.category : undefined,
+      state: isPersonState(body.state) ? body.state : undefined,
+      companyId: body.companyId,
+      prochaineActionTitre: body.prochaineActionTitre,
+      prochaineActionDate:
+        body.prochaineActionDate !== undefined ? parseOptionalDate(body.prochaineActionDate) ?? null : undefined,
+    },
+    user?.id,
+  );
 
-  if (body.statut !== undefined && !isContactStatut(body.statut)) {
-    return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
-  }
-
-  if (body.nom !== undefined && (typeof body.nom !== "string" || body.nom.trim() === "")) {
-    return NextResponse.json({ error: "Le nom est obligatoire" }, { status: 400 });
-  }
-
-  const contact = await updateContact(id, {
-    nom: body.nom,
-    email: body.email,
-    telephone: body.telephone,
-    statut: body.statut,
-    companyId: body.companyId,
-  });
-
+  if (!contact) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json(contact);
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+export async function DELETE(_request: Request, context: Ctx) {
   const { id } = await context.params;
-  const existing = await getContact(id);
-  if (!existing) {
-    return NextResponse.json({ error: "Contact introuvable" }, { status: 404 });
+  try {
+    await deleteContact(id);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
-  await deleteContact(id);
-  return NextResponse.json({ ok: true });
 }

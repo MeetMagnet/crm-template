@@ -1,63 +1,44 @@
-import { NextRequest, NextResponse } from "next/server";
-import { closeAction, deleteAction, getAction, updateAction } from "@/lib/actions";
-import { isActionStatut, isActionType, parseOptionalDate } from "@/lib/labels";
+import { NextResponse } from "next/server";
+import { deleteAction, getAction, updateAction } from "@/lib/actions";
+import { isActionChannel, isActionStatut, parseOptionalDate } from "@/lib/labels";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(_request: Request, context: Ctx) {
   const { id } = await context.params;
   const action = await getAction(id);
-  if (!action) {
-    return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
-  }
+  if (!action) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json(action);
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function PATCH(request: Request, context: Ctx) {
   const { id } = await context.params;
-  const existing = await getAction(id);
-  if (!existing) {
-    return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
-  }
-
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
-  }
-
-  if (body.cloturer === true) {
-    const closed = await closeAction(id);
-    return NextResponse.json(closed);
-  }
-
-  if (body.type !== undefined && !isActionType(body.type)) {
-    return NextResponse.json({ error: "Type d'action invalide" }, { status: 400 });
+  const body = await request.json().catch(() => ({}));
+  if (body.channel !== undefined && !isActionChannel(body.channel)) {
+    return NextResponse.json({ error: "Canal invalide" }, { status: 400 });
   }
   if (body.statut !== undefined && !isActionStatut(body.statut)) {
     return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
   }
-  if (body.titre !== undefined && (typeof body.titre !== "string" || body.titre.trim() === "")) {
-    return NextResponse.json({ error: "Le titre est obligatoire" }, { status: 400 });
-  }
-
   const action = await updateAction(id, {
-    type: body.type,
+    channel: isActionChannel(body.channel) ? body.channel : undefined,
     titre: body.titre,
     contenu: body.contenu,
-    statut: body.statut,
-    datePrevue: parseOptionalDate(body.datePrevue),
-    dateRealisation: parseOptionalDate(body.dateRealisation),
+    statut: isActionStatut(body.statut) ? body.statut : undefined,
+    datePrevue: body.datePrevue !== undefined ? parseOptionalDate(body.datePrevue) ?? null : undefined,
+    dateRealisation:
+      body.dateRealisation !== undefined ? parseOptionalDate(body.dateRealisation) ?? null : undefined,
   });
-
+  if (!action) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json(action);
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+export async function DELETE(_request: Request, context: Ctx) {
   const { id } = await context.params;
-  const existing = await getAction(id);
-  if (!existing) {
-    return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
+  try {
+    await deleteAction(id);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
-  await deleteAction(id);
-  return NextResponse.json({ ok: true });
 }

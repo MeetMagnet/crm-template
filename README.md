@@ -1,10 +1,8 @@
 # CRM Client
 
-CRM simple, prêt à l’emploi : contacts, entreprises, pipeline et actions. Personnalisable avec Cursor ou Claude Code, déployable sur Railway à partir du Dockerfile.
+CRM simple, prêt à l’emploi : contacts, entreprises, actions et statistiques. Personnalisable avec Cursor ou Claude Code, déployable sur Railway à partir du Dockerfile.
 
 ## Démarrage local (Docker)
-
-Aucune configuration manuelle n’est requise :
 
 ```bash
 docker compose up --build
@@ -12,7 +10,8 @@ docker compose up --build
 
 Ouvrez [http://localhost:3000](http://localhost:3000).
 
-Le token MCP de développement est `dev-mcp-token-change-me` (défini dans `docker-compose.yml`).
+- Connexion UI : `admin@example.com` / `admin123!` (variables `ADMIN_EMAIL` / `ADMIN_PASSWORD`)
+- Token MCP de développement : `dev-mcp-token-change-me`
 
 ## Démarrage local (Node)
 
@@ -24,37 +23,23 @@ npx prisma db seed
 npm run dev
 ```
 
-Modifiez `MCP_TOKEN` dans `.env` avant tout usage réel.
+Modifiez `MCP_TOKEN` et `AUTH_SECRET` dans `.env` avant tout usage réel.
 
 ## Fonctionnalités
 
-- Contacts : création, modification, suppression, recherche et filtre par statut
-- Entreprises : fiche et contacts rattachés
-- Pipeline : colonnes Lead / Contacté / RDV / Client / Perdu (glisser-déposer)
-- Actions liées à un contact : note, appel, e-mail, rendez-vous — création, démarrage, clôture
-- API REST sous `/api/contacts`, `/api/companies`, `/api/actions`
-- MCP sous `/api/mcp` (Bearer token)
+- **Auth UI** : session cookie (JWT) ; pages et API protégées sauf `/login`, `/api/health`, `/api/auth/login`, `/api/mcp`
+- **Contacts** : liste / kanban, filtres catégorie & état (taxonomie MeetMagnet), side peek Infos / Actions
+- **Entreprises** : liste + side peek Informations / Notes / Contacts
+- **Actions** : vue globale liste / kanban (À faire / En cours / Terminé)
+- **Statistiques** : stocks par catégorie / état, retards, historique d’états
+- **API REST** sous `/api/contacts`, `/api/companies`, `/api/actions`
+- **MCP** sous `/api/mcp` (Bearer `MCP_TOKEN`)
 
 ## MCP
 
 Authentification : header `Authorization: Bearer <MCP_TOKEN>`.
 
-Sans token valide, la route répond `401`.
-
-Exemples :
-
-```bash
-# Santé de la route (token requis)
-curl -H "Authorization: Bearer $MCP_TOKEN" http://localhost:3000/api/mcp
-
-# Liste des outils
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Authorization: Bearer $MCP_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-Outils exposés : `list_contacts`, `create_contact`, `update_contact_status`, `add_note`.
+Outils : `list_contacts`, `create_contact`, `update_contact_state`, `list_actions`, `add_note`.
 
 ## Déploiement Railway
 
@@ -63,16 +48,20 @@ Outils exposés : `list_contacts`, `create_contact`, `update_contact_status`, `a
 3. Ajoutez un volume persisté monté sur `/data`
 4. Variables d’environnement :
    - `DATABASE_URL=file:/data/crm.db`
-   - `MCP_TOKEN=` une valeur longue et aléatoire
+   - `MCP_TOKEN=` valeur longue et aléatoire
+   - `AUTH_SECRET=` valeur longue et aléatoire
+   - `ADMIN_EMAIL` / `ADMIN_PASSWORD` (premier seed)
 5. Un push sur `main` redéploie automatiquement
 
 ## Structure
 
 ```
-app/api/          routes REST et MCP
-app/(dashboard)/  interface
+app/api/          routes REST, auth et MCP
+app/(dashboard)/  interface (contacts, entreprises, actions, stats)
+app/login/        connexion UI
 prisma/           schéma SQLite et migrations
-lib/              Prisma + helpers (auth MCP, labels)
+lib/              Prisma, auth, labels, helpers
+middleware.ts     protection session UI
 Dockerfile        image de production (Railway)
 docker-compose.yml usage local
 ```
@@ -84,3 +73,4 @@ docker-compose.yml usage local
 - Toute nouvelle route API suit `/app/api/<ressource>/route.ts`
 - Ne jamais committer de token : uniquement des variables d’environnement
 - Pas de service externe supplémentaire sans validation
+- Taxonomie contacts alignée MeetMagnet (catégorie + état)

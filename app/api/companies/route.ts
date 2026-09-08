@@ -1,26 +1,31 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createCompany, listCompanies } from "@/lib/companies";
 
-export async function GET(request: NextRequest) {
-  const q = request.nextUrl.searchParams.get("q") ?? undefined;
-  const companies = await listCompanies(q);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const companies = await listCompanies(searchParams.get("q") ?? undefined);
   return NextResponse.json(companies);
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body.nom !== "string" || body.nom.trim() === "") {
-    return NextResponse.json({ error: "Le nom est obligatoire" }, { status: 400 });
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  try {
+    const company = await createCompany({
+      nom: body.nom,
+      email: body.email,
+      telephone: body.telephone,
+      adresse: body.adresse,
+      siteWeb: body.siteWeb,
+      siret: body.siret,
+      linkedinUrl: body.linkedinUrl,
+      description: body.description,
+      notes: body.notes,
+    });
+    return NextResponse.json(company, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Création impossible" },
+      { status: 400 },
+    );
   }
-
-  const company = await createCompany({
-    nom: body.nom,
-    email: body.email ?? null,
-    telephone: body.telephone ?? null,
-    adresse: body.adresse ?? null,
-    siteWeb: body.siteWeb ?? null,
-    notes: body.notes ?? null,
-  });
-
-  return NextResponse.json(company, { status: 201 });
 }

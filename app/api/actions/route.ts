@@ -1,52 +1,44 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { createAction, listActions } from "@/lib/actions";
-import { getContact } from "@/lib/contacts";
-import { isActionStatut, isActionType, parseOptionalDate } from "@/lib/labels";
+import { isActionChannel, isActionStatut, parseOptionalDate } from "@/lib/labels";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const statutParam = searchParams.get("statut");
-  const statut = statutParam && isActionStatut(statutParam) ? statutParam : undefined;
-
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
   const actions = await listActions({
+    q: searchParams.get("q") ?? undefined,
+    channel: searchParams.get("channel") ?? undefined,
+    statut: searchParams.get("statut") ?? undefined,
+    contactCategory: searchParams.get("contactCategory") ?? undefined,
     contactId: searchParams.get("contactId") ?? undefined,
-    statut,
   });
   return NextResponse.json(actions);
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body.contactId !== "string") {
-    return NextResponse.json({ error: "contactId est obligatoire" }, { status: 400 });
-  }
-  if (typeof body.titre !== "string" || body.titre.trim() === "") {
-    return NextResponse.json({ error: "Le titre est obligatoire" }, { status: 400 });
-  }
-  if (!isActionType(body.type)) {
-    return NextResponse.json({ error: "Type d'action invalide" }, { status: 400 });
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  const body = await request.json().catch(() => ({}));
+  if (!isActionChannel(body.channel)) {
+    return NextResponse.json({ error: "Canal invalide" }, { status: 400 });
   }
   if (body.statut !== undefined && !isActionStatut(body.statut)) {
     return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
   }
-
-  const contact = await getContact(body.contactId);
-  if (!contact) {
-    return NextResponse.json({ error: "Contact introuvable" }, { status: 404 });
+  try {
+    const action = await createAction({
+      contactId: body.contactId,
+      channel: body.channel,
+      titre: body.titre,
+      contenu: body.contenu,
+      statut: isActionStatut(body.statut) ? body.statut : undefined,
+      datePrevue: parseOptionalDate(body.datePrevue) ?? null,
+      userId: user?.id ?? null,
+    });
+    return NextResponse.json(action, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Création impossible" },
+      { status: 400 },
+    );
   }
-
-  const datePrevue = parseOptionalDate(body.datePrevue);
-  const dateRealisation = parseOptionalDate(body.dateRealisation);
-
-  const action = await createAction({
-    contactId: body.contactId,
-    type: body.type,
-    titre: body.titre,
-    contenu: typeof body.contenu === "string" ? body.contenu : "",
-    statut: body.statut,
-    datePrevue: datePrevue === undefined ? null : datePrevue,
-    dateRealisation: dateRealisation === undefined ? null : dateRealisation,
-  });
-
-  return NextResponse.json(action, { status: 201 });
 }

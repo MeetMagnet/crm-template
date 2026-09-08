@@ -1,34 +1,56 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { createContact, listContacts } from "@/lib/contacts";
-import { isContactStatut } from "@/lib/labels";
+import { isPersonCategory, isPersonState, parseOptionalDate } from "@/lib/labels";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
   const contacts = await listContacts({
     q: searchParams.get("q") ?? undefined,
-    statut: searchParams.get("statut") ?? undefined,
-    companyId: searchParams.get("companyId") ?? undefined,
+    category: searchParams.get("category") ?? undefined,
+    state: searchParams.get("state") ?? undefined,
   });
   return NextResponse.json(contacts);
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body.nom !== "string" || body.nom.trim() === "") {
-    return NextResponse.json({ error: "Le nom est obligatoire" }, { status: 400 });
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  const body = await request.json().catch(() => ({}));
+  const prenom = String(body.prenom ?? "").trim();
+  const nom = String(body.nom ?? "").trim();
+  if (!prenom && !nom) {
+    return NextResponse.json({ error: "Prénom ou nom requis" }, { status: 400 });
   }
 
-  if (body.statut !== undefined && !isContactStatut(body.statut)) {
-    return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
+  const category = body.category;
+  const state = body.state;
+  if (category !== undefined && category !== null && category !== "" && !isPersonCategory(category)) {
+    return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
+  }
+  if (state !== undefined && state !== null && state !== "" && !isPersonState(state)) {
+    return NextResponse.json({ error: "État invalide" }, { status: 400 });
   }
 
-  const contact = await createContact({
-    nom: body.nom,
-    email: body.email ?? null,
-    telephone: body.telephone ?? null,
-    statut: body.statut,
-    companyId: body.companyId ?? null,
-  });
+  const contact = await createContact(
+    {
+      prenom,
+      nom,
+      email: body.email ?? null,
+      telephone: body.telephone ?? null,
+      poste: body.poste ?? null,
+      linkedinUrl: body.linkedinUrl ?? null,
+      description: body.description ?? null,
+      adresse: body.adresse ?? null,
+      pays: body.pays ?? null,
+      source: body.source ?? null,
+      category: isPersonCategory(category) ? category : undefined,
+      state: isPersonState(state) ? state : undefined,
+      companyId: body.companyId || null,
+      prochaineActionTitre: body.prochaineActionTitre ?? null,
+      prochaineActionDate: parseOptionalDate(body.prochaineActionDate) ?? null,
+    },
+    user?.id,
+  );
 
   return NextResponse.json(contact, { status: 201 });
 }

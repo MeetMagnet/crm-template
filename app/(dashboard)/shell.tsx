@@ -1,42 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const links = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/pipeline", label: "Pipeline" },
   { href: "/contacts", label: "Contacts" },
   { href: "/companies", label: "Entreprises" },
+  { href: "/actions", label: "Actions" },
+  { href: "/stats", label: "Statistiques" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  userEmail,
+}: {
+  children: React.ReactNode;
+  userEmail?: string | null;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="shell">
+      <div className={`mobile-backdrop ${open ? "open" : ""}`} onClick={() => setOpen(false)} />
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="brand">
-          <span className="brand-mark">CR</span>
-          <span>CRM Client</span>
-        </div>
+        <div className="brand">CRM Client</div>
         <nav className="nav">
           {links.map((link) => {
-            const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+            const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
             return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={active ? "active" : ""}
-                onClick={() => setOpen(false)}
-              >
+              <Link key={link.href} href={link.href} className={active ? "active" : ""} onClick={() => setOpen(false)}>
                 {link.label}
               </Link>
             );
           })}
         </nav>
+        <div className="sidebar-footer">
+          {userEmail ? <div className="muted" style={{ padding: "6px 12px", fontSize: 12 }}>{userEmail}</div> : null}
+          <button className="btn secondary" type="button" onClick={() => void logout()} style={{ width: "100%" }}>
+            Déconnexion
+          </button>
+        </div>
       </aside>
       <div className="main">
         <button className="btn secondary small menu-toggle" type="button" onClick={() => setOpen((v) => !v)}>

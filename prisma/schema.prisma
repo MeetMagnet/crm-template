@@ -7,20 +7,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ContactStatut {
+enum PersonCategory {
   lead
-  contacte
-  rdv
+  prospect
   client
-  perdu
+  ex_clients
+  autres
 }
 
-enum ActionType {
-  note
-  appel
+enum PersonState {
+  a_traiter
+  a_rappeler
+  relance_3mois
+  inscription_site
+  inscription_newsletter_inscrite
+  new_lead
+  lead_en_cours
+  free_trial
+  onboarding
+  rdv_a_planifier
+  rdv_decouverte
+  rencontre
+  rdv2_planifie
+  relance_suite_rdv
+  propale
+  done
+  kickoff
+  perdu
+  concurrent
+  ok_plus_tard
+  mis_de_cote
+  pas_de_besoin
+  pas_interesse
+  prospect_pas_interlocuteur
+  plus_dans_societe
+  mauvaise_cible
+  nok
+  erreur_email
+  waitlist
+  erreur_invitation_linkedin
+  autres
+}
+
+enum ActionChannel {
   email
-  rendez_vous
-  autre
+  linkedin
+  phone
+  meeting
+  note
+  other
 }
 
 enum ActionStatut {
@@ -29,49 +64,98 @@ enum ActionStatut {
   termine
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String?
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  actions      Action[]
+  stateChanges ContactStateHistory[]
+}
+
 model Company {
-  id        String    @id @default(cuid())
-  nom       String
-  email     String?
-  telephone String?
-  adresse   String?
-  siteWeb   String?
-  notes     String?
-  contacts  Contact[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  nom         String
+  email       String?
+  telephone   String?
+  adresse     String?
+  siteWeb     String?
+  siret       String?
+  linkedinUrl String?
+  description String?
+  notes       String?
+  contacts    Contact[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Contact {
-  id        String        @id @default(cuid())
-  nom       String
-  email     String?
-  telephone String?
-  statut    ContactStatut @default(lead)
-  companyId String?
-  company   Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  actions   Action[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id                    String         @id @default(cuid())
+  prenom                String         @default("")
+  nom                   String         @default("")
+  email                 String?
+  telephone             String?
+  poste                 String?
+  linkedinUrl           String?
+  description           String?
+  adresse               String?
+  pays                  String?
+  source                String?
+  category              PersonCategory @default(lead)
+  state                 PersonState    @default(new_lead)
+  companyId             String?
+  company               Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  prochaineActionTitre  String?
+  prochaineActionDate   DateTime?
+  actions               Action[]
+  stateHistory          ContactStateHistory[]
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
-  @@index([statut])
+  @@index([category])
+  @@index([state])
   @@index([companyId])
   @@index([nom])
+  @@index([prenom])
+  @@index([prochaineActionDate])
+}
+
+model ContactStateHistory {
+  id               String          @id @default(cuid())
+  contactId        String
+  contact          Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  previousState    PersonState?
+  newState         PersonState
+  previousCategory PersonCategory?
+  newCategory      PersonCategory?
+  changedById      String?
+  changedBy        User?           @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  note             String?
+  createdAt        DateTime        @default(now())
+
+  @@index([contactId, createdAt])
 }
 
 model Action {
-  id              String       @id @default(cuid())
+  id              String        @id @default(cuid())
   contactId       String
-  contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  type            ActionType
+  contact         Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  channel         ActionChannel
   titre           String
-  contenu         String       @default("")
-  statut          ActionStatut @default(a_faire)
+  contenu         String        @default("")
+  statut          ActionStatut  @default(a_faire)
   datePrevue      DateTime?
   dateRealisation DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([contactId])
   @@index([statut])
+  @@index([channel])
+  @@index([datePrevue])
 }

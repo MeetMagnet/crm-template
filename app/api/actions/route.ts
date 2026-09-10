@@ -1,18 +1,36 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { createAction, listActions } from "@/lib/actions";
+import type { ActionSort } from "@/lib/actions";
 import { isActionChannel, isActionStatut, parseOptionalDate } from "@/lib/labels";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const actions = await listActions({
-    q: searchParams.get("q") ?? undefined,
-    channel: searchParams.get("channel") ?? undefined,
-    statut: searchParams.get("statut") ?? undefined,
-    contactCategory: searchParams.get("contactCategory") ?? undefined,
-    contactId: searchParams.get("contactId") ?? undefined,
-  });
-  return NextResponse.json(actions);
+  let sorts: ActionSort[] = [];
+  const sortsRaw = searchParams.get("sorts");
+  if (sortsRaw) {
+    try {
+      sorts = JSON.parse(sortsRaw) as ActionSort[];
+    } catch {
+      sorts = [];
+    }
+  }
+  const result = await listActions(
+    {
+      q: searchParams.get("q") ?? undefined,
+      channel: searchParams.get("channel") ?? undefined,
+      statut: searchParams.get("statut") ?? undefined,
+      contactCategory: searchParams.get("contactCategory") ?? undefined,
+      contactId: searchParams.get("contactId") ?? undefined,
+      titre: searchParams.get("titre") ?? undefined,
+    },
+    {
+      sorts,
+      page: Number(searchParams.get("page") ?? 1),
+      pageSize: Number(searchParams.get("pageSize") ?? 25),
+    },
+  );
+  return NextResponse.json(result);
 }
 
 export async function POST(request: Request) {

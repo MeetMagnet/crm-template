@@ -1,12 +1,10 @@
 import { Suspense } from "react";
-import { listCompanies } from "@/lib/companies";
 import { CompaniesWorkspace } from "./companies-workspace";
 
-export default async function CompaniesPage() {
-  const companies = await listCompanies();
+export default function CompaniesPage() {
   return (
     <Suspense>
-      <CompaniesWorkspace initialCompanies={companies} />
+      <CompaniesWorkspace />
     </Suspense>
   );
 }

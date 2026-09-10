@@ -44,8 +44,8 @@ export function AppShell({
           })}
         </nav>
         <div className="sidebar-footer">
-          {userEmail ? <div className="muted" style={{ padding: "6px 12px", fontSize: 12 }}>{userEmail}</div> : null}
-          <button className="btn secondary" type="button" onClick={() => void logout()} style={{ width: "100%" }}>
+          {userEmail ? <div className="nav-user">{userEmail}</div> : null}
+          <button className="nav-logout" type="button" onClick={() => void logout()}>
             Déconnexion
           </button>
         </div>

@@ -28,6 +28,10 @@ export async function PATCH(request: Request, context: Ctx) {
     datePrevue: body.datePrevue !== undefined ? parseOptionalDate(body.datePrevue) ?? null : undefined,
     dateRealisation:
       body.dateRealisation !== undefined ? parseOptionalDate(body.dateRealisation) ?? null : undefined,
+    customFields:
+      body.customFields && typeof body.customFields === "object" && !Array.isArray(body.customFields)
+        ? (body.customFields as Record<string, unknown>)
+        : undefined,
   });
   if (!action) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json(action);

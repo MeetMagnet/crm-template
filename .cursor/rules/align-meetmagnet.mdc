@@ -15,7 +15,8 @@ alwaysApply: true
 1. **États / catégories** : mêmes que MeetMagnet (`personState` / `personStateCatalog`)
 2. **Accueil** : `/contacts` (liste + kanban)
 3. **Auth** : session cookie sur l’UI ; `MCP_TOKEN` uniquement pour `/api/mcp`
-4. **Hors scope** : newsletter, séquences, agents IA, chat, ciblage, point hebdo, suivi clients, formulaires, colonnes custom, vues sauvegardées, éditeur de blocs, enrichissement LinkedIn, billing
+4. **UI listes** : même pattern que MeetMagnet (checkbox + bulk, vues sauvegardées, filtres, tri, colonnes visibles/réordonnables, colonnes custom create/edit, pagination, total)
+5. **Hors scope avancé** : newsletter, séquences, agents IA, chat, ciblage, point hebdo, suivi clients, formulaires, éditeur de blocs, enrichissement LinkedIn, billing
 
 ## UI
 - Style Notion : fond `#ffffff`, texte `#37352f`, bordures `#e9e9e7`, hover `#f7f6f3`, primaire `#37352f`

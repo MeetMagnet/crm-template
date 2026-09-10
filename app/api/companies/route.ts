@@ -1,10 +1,32 @@
 import { NextResponse } from "next/server";
 import { createCompany, listCompanies } from "@/lib/companies";
+import type { CompanySort } from "@/lib/companies";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const companies = await listCompanies(searchParams.get("q") ?? undefined);
-  return NextResponse.json(companies);
+  let sorts: CompanySort[] = [];
+  const sortsRaw = searchParams.get("sorts");
+  if (sortsRaw) {
+    try {
+      sorts = JSON.parse(sortsRaw) as CompanySort[];
+    } catch {
+      sorts = [];
+    }
+  }
+  const result = await listCompanies(
+    {
+      q: searchParams.get("q") ?? undefined,
+      email: searchParams.get("email") ?? undefined,
+      siteWeb: searchParams.get("siteWeb") ?? undefined,
+      siret: searchParams.get("siret") ?? undefined,
+    },
+    {
+      sorts,
+      page: Number(searchParams.get("page") ?? 1),
+      pageSize: Number(searchParams.get("pageSize") ?? 25),
+    },
+  );
+  return NextResponse.json(result);
 }
 
 export async function POST(request: Request) {

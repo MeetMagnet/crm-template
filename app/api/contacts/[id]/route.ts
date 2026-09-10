@@ -43,6 +43,10 @@ export async function PATCH(request: Request, context: Ctx) {
       prochaineActionTitre: body.prochaineActionTitre,
       prochaineActionDate:
         body.prochaineActionDate !== undefined ? parseOptionalDate(body.prochaineActionDate) ?? null : undefined,
+      customFields:
+        body.customFields && typeof body.customFields === "object" && !Array.isArray(body.customFields)
+          ? (body.customFields as Record<string, unknown>)
+          : undefined,
     },
     user?.id,
   );

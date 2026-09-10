@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
+import { bulkDeleteContacts, bulkUpdateContacts } from "@/lib/contacts";
+import { isPersonCategory, isPersonState } from "@/lib/labels";
+
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  const body = await request.json().catch(() => ({}));
+  const ids = Array.isArray(body.ids) ? body.ids.filter((id: unknown) => typeof id === "string") : [];
+  if (!ids.length) {
+    return NextResponse.json({ error: "Aucun contact sélectionné" }, { status: 400 });
+  }
+
+  const action = String(body.action ?? "");
+  if (action === "delete") {
+    const result = await bulkDeleteContacts(ids);
+    return NextResponse.json({ ok: true, count: result.count });
+  }
+
+  if (action === "update") {
+    const patch: { category?: never; state?: never } = {};
+    if (body.category !== undefined && body.category !== "") {
+      if (!isPersonCategory(body.category)) {
+        return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
+      }
+      (patch as { category?: string }).category = body.category;
+    }
+    if (body.state !== undefined && body.state !== "") {
+      if (!isPersonState(body.state)) {
+        return NextResponse.json({ error: "État invalide" }, { status: 400 });
+      }
+      (patch as { state?: string }).state = body.state;
+    }
+    if (!("category" in patch) && !("state" in patch)) {
+      return NextResponse.json({ error: "Rien à modifier" }, { status: 400 });
+    }
+    const updated = await bulkUpdateContacts(ids, patch as never, user?.id);
+    return NextResponse.json({ ok: true, count: updated.length });
+  }
+
+  return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
+}

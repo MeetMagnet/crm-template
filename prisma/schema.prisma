@@ -77,19 +77,20 @@ model User {
 }
 
 model Company {
-  id          String    @id @default(cuid())
-  nom         String
-  email       String?
-  telephone   String?
-  adresse     String?
-  siteWeb     String?
-  siret       String?
-  linkedinUrl String?
-  description String?
-  notes       String?
-  contacts    Contact[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  nom          String
+  email        String?
+  telephone    String?
+  adresse      String?
+  siteWeb      String?
+  siret        String?
+  linkedinUrl  String?
+  description  String?
+  notes        String?
+  customFields String    @default("{}")
+  contacts     Contact[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model Contact {
@@ -110,6 +111,7 @@ model Contact {
   company               Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
   prochaineActionTitre  String?
   prochaineActionDate   DateTime?
+  customFields          String         @default("{}")
   actions               Action[]
   stateHistory          ContactStateHistory[]
   createdAt             DateTime       @default(now())
@@ -151,6 +153,7 @@ model Action {
   statut          ActionStatut  @default(a_faire)
   datePrevue      DateTime?
   dateRealisation DateTime?
+  customFields    String        @default("{}")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -158,4 +161,33 @@ model Action {
   @@index([statut])
   @@index([channel])
   @@index([datePrevue])
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  name      String
+  entity    String
+  viewType  String   @default("list")
+  filters   String   @default("{}")
+  userId    String?
+  isShared  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entity])
+  @@index([userId])
+}
+
+model CustomColumn {
+  id         String   @id @default(cuid())
+  entityType String
+  key        String
+  label      String
+  type       String   @default("text")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([entityType, key])
+  @@index([entityType])
 }

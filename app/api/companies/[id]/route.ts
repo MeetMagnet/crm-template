@@ -24,6 +24,10 @@ export async function PATCH(request: Request, context: Ctx) {
       linkedinUrl: body.linkedinUrl,
       description: body.description,
       notes: body.notes,
+      customFields:
+        body.customFields && typeof body.customFields === "object" && !Array.isArray(body.customFields)
+          ? (body.customFields as Record<string, unknown>)
+          : undefined,
     });
     return NextResponse.json(company);
   } catch {

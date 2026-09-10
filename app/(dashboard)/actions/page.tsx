@@ -1,7 +1,10 @@
-import { listActions } from "@/lib/actions";
+import { Suspense } from "react";
 import { ActionsWorkspace } from "./actions-workspace";
 
-export default async function ActionsPage() {
-  const actions = await listActions();
-  return <ActionsWorkspace initialActions={actions} />;
+export default function ActionsPage() {
+  return (
+    <Suspense>
+      <ActionsWorkspace />
+    </Suspense>
+  );
 }

@@ -2,15 +2,37 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { createContact, listContacts } from "@/lib/contacts";
 import { isPersonCategory, isPersonState, parseOptionalDate } from "@/lib/labels";
+import type { ContactSort } from "@/lib/contacts";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const contacts = await listContacts({
-    q: searchParams.get("q") ?? undefined,
-    category: searchParams.get("category") ?? undefined,
-    state: searchParams.get("state") ?? undefined,
-  });
-  return NextResponse.json(contacts);
+  const sortsRaw = searchParams.get("sorts");
+  let sorts: ContactSort[] = [];
+  if (sortsRaw) {
+    try {
+      sorts = JSON.parse(sortsRaw) as ContactSort[];
+    } catch {
+      sorts = [];
+    }
+  }
+
+  const result = await listContacts(
+    {
+      q: searchParams.get("q") ?? undefined,
+      category: searchParams.get("category") ?? undefined,
+      state: searchParams.get("state") ?? undefined,
+      source: searchParams.get("source") ?? undefined,
+      email: searchParams.get("email") ?? undefined,
+      telephone: searchParams.get("telephone") ?? undefined,
+      poste: searchParams.get("poste") ?? undefined,
+    },
+    {
+      sorts,
+      page: Number(searchParams.get("page") ?? 1),
+      pageSize: Number(searchParams.get("pageSize") ?? 25),
+    },
+  );
+  return NextResponse.json(result);
 }
 
 export async function POST(request: Request) {
@@ -48,6 +70,10 @@ export async function POST(request: Request) {
       companyId: body.companyId || null,
       prochaineActionTitre: body.prochaineActionTitre ?? null,
       prochaineActionDate: parseOptionalDate(body.prochaineActionDate) ?? null,
+      customFields:
+        body.customFields && typeof body.customFields === "object" && !Array.isArray(body.customFields)
+          ? (body.customFields as Record<string, unknown>)
+          : undefined,
     },
     user?.id,
   );

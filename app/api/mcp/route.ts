@@ -140,13 +140,16 @@ export async function POST(request: Request) {
 
     try {
       if (name === "list_contacts") {
-        const contacts = await listContacts({
-          q: typeof args.query === "string" ? args.query : undefined,
-          category: typeof args.category === "string" ? args.category : undefined,
-          state: typeof args.state === "string" ? args.state : undefined,
-        });
+        const result = await listContacts(
+          {
+            q: typeof args.query === "string" ? args.query : undefined,
+            category: typeof args.category === "string" ? args.category : undefined,
+            state: typeof args.state === "string" ? args.state : undefined,
+          },
+          { pageSize: 1000 },
+        );
         return ok(id, {
-          content: [{ type: "text", text: JSON.stringify(contacts, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         });
       }
 
@@ -185,13 +188,16 @@ export async function POST(request: Request) {
       }
 
       if (name === "list_actions") {
-        const actions = await listActions({
-          q: typeof args.query === "string" ? args.query : undefined,
-          contactId: typeof args.contactId === "string" ? args.contactId : undefined,
-          statut: typeof args.statut === "string" ? args.statut : undefined,
-        });
+        const result = await listActions(
+          {
+            q: typeof args.query === "string" ? args.query : undefined,
+            contactId: typeof args.contactId === "string" ? args.contactId : undefined,
+            statut: typeof args.statut === "string" ? args.statut : undefined,
+          },
+          { pageSize: 1000 },
+        );
         return ok(id, {
-          content: [{ type: "text", text: JSON.stringify(actions, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         });
       }
 

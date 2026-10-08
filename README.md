@@ -173,28 +173,26 @@ Règle d’or : ne demandez **jamais** à l’IA de mettre des mots de passe ou 
 ## 7. Brancher Claude (connecteur MCP)
 
 Le CRM expose une “prise” appelée **MCP**.  
-Claude peut s’y brancher pour lister/créer des contacts, etc.
+Claude s’y branche avec l’URL affichée dans **Paramètres**. L’autorisation se fait dans le navigateur, avec votre compte CRM : pas besoin de coller un jeton.
 
-### 7.1 Ce qu’il vous faut
+### 7.1 Le lien à copier
 
-- L’URL publique de votre CRM  
-  Exemple : `https://mon-crm-production.up.railway.app`
-- Votre `MCP_TOKEN` (celui mis dans Railway)
+Dans le CRM : **Paramètres → Connecteur MCP → Copier**.
 
-Adresse MCP :
+L’URL a cette forme :
 
 ```text
-https://VOTRE-URL-RAILWAY/api/mcp
+https://VOTRE-URL/mcp
 ```
 
 ### 7.2 Brancher dans Claude
 
-Selon l’interface Claude (Connectors / MCP / Custom tools) :
+1. Dans Claude : Paramètres → Connecteurs → Ajouter un connecteur personnalisé.
+2. Collez l’URL copiée (`…/mcp`), sans jeton.
+3. Claude ouvre le CRM. Connectez-vous si besoin, puis cliquez sur **Autoriser**.
+4. Claude reçoit un accès et peut utiliser les outils du CRM.
 
-1. Ajoutez un connecteur personnalisé.
-2. URL : `https://VOTRE-URL-RAILWAY/api/mcp`
-3. Authentification : **Bearer Token**
-4. Token : votre `MCP_TOKEN`
+`/api/mcp` reste disponible pour Cursor avec le header `Authorization: Bearer` et `MCP_TOKEN`.
 
 ### 7.3 Ce que Claude peut faire (outils inclus)
 
@@ -207,7 +205,7 @@ Exemple de demande à Claude une fois branché :
 
 > Liste mes contacts en catégorie prospect.
 
-Si Claude répond “401 / non autorisé” : le token est faux ou mal collé.
+Si Claude n’arrive pas à se connecter, ouvrez à nouveau le lien : la page **Autoriser** doit s’afficher après la connexion au CRM.
 
 ---
 
@@ -264,7 +262,7 @@ Si quelque chose casse : regardez les **Logs** Railway, puis demandez à Cursor 
 - Ne publiez jamais `MCP_TOKEN`, `AUTH_SECRET`, `ADMIN_PASSWORD`.
 - Donnez l’accès GitHub/Railway seulement aux personnes de confiance.
 - Changez les secrets dès la mise en production.
-- Le login protège l’interface web ; le `MCP_TOKEN` protège l’accès IA.
+- Le login protège l’interface web. Claude s’autorise via cette session ; Cursor utilise `MCP_TOKEN`.
 
 ---
 
@@ -280,9 +278,9 @@ Si quelque chose casse : regardez les **Logs** Railway, puis demandez à Cursor 
 - Ajoutez-le, puis redéployez.
 
 ### “Claude / Cursor ne se connecte pas au CRM”
-- Vérifiez l’URL : elle doit finir par `/api/mcp`
-- Vérifiez le Bearer token = `MCP_TOKEN`
-- Vérifiez que le service Railway est bien “Online”
+- Claude : l’URL copiée dans Paramètres doit finir par `/mcp` (sans jeton).
+- Cursor : l’URL finit par `/api/mcp`, avec le header Bearer = `MCP_TOKEN`.
+- Vérifiez que le service Railway est bien “Online”.
 
 ### “Le site est blanc / erreur 502”
 - Attendez la fin du build.
@@ -316,7 +314,7 @@ Identifiants de démo Docker :
 4. Domaine public  
 5. Variables `MCP_TOKEN`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`  
 6. Se connecter au CRM  
-7. Brancher Claude / Cursor via `/api/mcp`  
+7. Brancher Claude via Paramètres (`/mcp`) ; Cursor via `/api/mcp`  
 8. Demander des évolutions à Cursor, puis push
 
 Vous êtes prêt.

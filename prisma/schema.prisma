@@ -183,6 +183,51 @@ model Setting {
   value String
 }
 
+model McpOAuthClient {
+  id                      String   @id @default(cuid())
+  clientId                String   @unique
+  clientSecretHash        String?
+  clientName              String
+  redirectUris            String
+  grantTypes              String
+  responseTypes           String
+  tokenEndpointAuthMethod String
+  scope                   String
+  createdAt               DateTime @default(now())
+}
+
+model McpOAuthCode {
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique
+  clientId            String
+  userId              String
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String
+  scope               String
+  resource            String
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+model McpOAuthToken {
+  id               String    @id @default(cuid())
+  accessTokenHash  String    @unique
+  refreshTokenHash String    @unique
+  clientId         String
+  userId           String
+  scope            String
+  resource         String
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([clientId])
+}
+
 model CustomColumn {
   id         String   @id @default(cuid())
   entityType String

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ActionChannel, ActionStatut, PersonCategory, PersonState } from "@prisma/client";
 import { requireMcpAuth } from "@/lib/auth-mcp";
+import { corsHeaders, corsPreflight } from "@/lib/mcp-public";
 import { addNote, createAction, deleteAction, getAction, listActions, updateAction } from "@/lib/actions";
 import { createCompany, deleteCompany, getCompany, listCompanies, updateCompany } from "@/lib/companies";
 import { createContact, deleteContact, getContact, listContacts, updateContact } from "@/lib/contacts";
@@ -244,11 +245,11 @@ const tools = [
 ];
 
 function ok(id: JsonRpcId | undefined, result: unknown) {
-  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result });
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result }, { headers: corsHeaders() });
 }
 
 function fail(id: JsonRpcId | undefined, code: number, message: string) {
-  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { headers: corsHeaders() });
 }
 
 function text(value: unknown) {
@@ -307,18 +308,25 @@ function companyInput(args: Record<string, unknown>) {
   };
 }
 
+export function OPTIONS() {
+  return corsPreflight();
+}
+
 export async function GET(request: Request) {
-  const auth = requireMcpAuth(request);
+  const auth = await requireMcpAuth(request);
   if (auth) return auth;
-  return NextResponse.json({
-    status: "ok",
-    protocolVersion: PROTOCOL_VERSION,
-    tools: tools.map((tool) => tool.name),
-  });
+  return NextResponse.json(
+    {
+      status: "ok",
+      protocolVersion: PROTOCOL_VERSION,
+      tools: tools.map((tool) => tool.name),
+    },
+    { headers: corsHeaders() },
+  );
 }
 
 export async function POST(request: Request) {
-  const auth = requireMcpAuth(request);
+  const auth = await requireMcpAuth(request);
   if (auth) return auth;
 
   const body = (await request.json().catch(() => null)) as JsonRpcRequest | null;

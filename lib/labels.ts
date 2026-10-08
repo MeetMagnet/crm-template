@@ -208,10 +208,53 @@ export const ACTION_CHANNEL_LABELS: Record<ActionChannel, string> = {
 };
 
 export const ACTION_STATUT_LABELS: Record<ActionStatut, string> = {
-  a_faire: "À faire",
+  a_faire: "to do",
   en_cours: "En cours",
   termine: "Terminé",
 };
+
+/** Provenance commerciale (MeetMagnet), sans newsletter ni intégrations. */
+export const PROVENANCE_OPTIONS = [
+  "MeetMagnet",
+  "LinkedIn",
+  "Email",
+  "Téléphone",
+  "Site web",
+  "Webinaire",
+  "Prise de contact directe",
+  "Outil de prospection / scraping",
+  "Bouche-à-oreille",
+  "Recherche perso",
+  "Salon",
+  "Événement",
+  "Réseau",
+  "Affiliation",
+  "Agence",
+  "Quentin",
+  "Saisie manuelle",
+  "Autre",
+] as const;
+
+export function parseProvenance(source: string | null | undefined): string[] {
+  if (!source) return [];
+  return source
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function formatProvenance(values: string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const label = value.trim();
+    const key = label.toLowerCase();
+    if (!label || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out.join(", ");
+}
 
 export function isPersonCategory(value: unknown): value is PersonCategory {
   return typeof value === "string" && PERSON_CATEGORIES.includes(value as PersonCategory);

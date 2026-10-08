@@ -491,16 +491,89 @@ tr.row-link:hover {
 
 .prop-row {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
+  grid-template-columns: minmax(7rem, 26%) minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: start;
   min-height: 36px;
+  padding: 3px 0;
   border-bottom: 1px solid #f1f1ef;
 }
 
 .prop-label {
   font-size: 13px;
   color: var(--muted);
+  padding-top: 6px;
+}
+
+.choice-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.choice-chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.choice-chip.active {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.next-action-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #fff;
+}
+
+.next-action-box .input {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.next-action-box .input + .input {
+  border-top: 1px solid var(--line);
+}
+
+.inline-field,
+.stack-tight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stack-tight {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.text-link {
+  color: #2e7bb8;
+  font-size: 13px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.journey {
+  margin: 6px 0;
+  font-size: 13px;
 }
 
 .prop-value .input,

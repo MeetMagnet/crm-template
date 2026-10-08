@@ -31,6 +31,8 @@ import {
   type CustomColumnRecord,
 } from "@/lib/custom-columns";
 import { CustomColumnModal } from "@/app/components/custom-column-modal";
+import { PropertyRow } from "@/app/components/property-sheet";
+import { SidePeek } from "@/app/components/side-peek";
 
 type ActionRow = {
   id: string;
@@ -52,6 +54,47 @@ type ActionRow = {
 type SavedView = { id: string; name: string; viewType: string; filters: Record<string, unknown> };
 
 const STORAGE_KEY = "crm-actions-default-layout";
+
+const WORKFLOW_BUCKETS: Array<{ value: "" | ActionStatut; label: string }> = [
+  { value: "a_faire", label: "to do" },
+  { value: "en_cours", label: "En cours" },
+  { value: "termine", label: "Terminé" },
+  { value: "", label: "Toutes" },
+];
+
+const DATE_COLUMNS = [
+  { key: "overdue", label: "En retard" },
+  { key: "today", label: "Aujourd'hui" },
+  { key: "week", label: "7 prochains jours" },
+  { key: "later", label: "Plus tard" },
+  { key: "none", label: "Sans date" },
+];
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function actionDateBucket(value: string | Date | null | undefined) {
+  if (!value) return "none";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "none";
+  const diff = (startOfDay(date).getTime() - startOfDay(new Date()).getTime()) / 86400000;
+  if (diff < 0) return "overdue";
+  if (diff === 0) return "today";
+  if (diff <= 7) return "week";
+  return "later";
+}
+
+function dateForBucket(bucket: string) {
+  const today = startOfDay(new Date());
+  if (bucket === "none") return null;
+  if (bucket === "overdue") today.setDate(today.getDate() - 1);
+  if (bucket === "week") today.setDate(today.getDate() + 3);
+  if (bucket === "later") today.setDate(today.getDate() + 14);
+  return today.toISOString();
+}
 const BASE_COLUMN_DEFS: ColumnDef[] = [
   { key: "titre", label: "Titre" },
   { key: "contact", label: "Contact" },
@@ -91,6 +134,21 @@ export function ActionsWorkspace() {
   const [customColumns, setCustomColumns] = useState<CustomColumnRecord[]>([]);
   const [columnModalOpen, setColumnModalOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<CustomColumnRecord | null>(null);
+  const [workflowBucket, setWorkflowBucket] = useState<"" | ActionStatut>("a_faire");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [peek, setPeek] = useState<ActionRow | null>(null);
+  const [creatingAction, setCreatingAction] = useState(false);
+  const [actionDraft, setActionDraft] = useState({
+    contactId: "",
+    channel: "note" as ActionChannel,
+    titre: "",
+    contenu: "",
+    statut: "a_faire" as ActionStatut,
+    datePrevue: "",
+  });
+  const [contactOptions, setContactOptions] = useState<Array<{ id: string; label: string }>>([]);
+  const [actionError, setActionError] = useState("");
+  const [actionSaving, setActionSaving] = useState(false);
 
   useEffect(() => {
     setLayout(loadLayout(STORAGE_KEY, DEFAULT_LAYOUT));
@@ -142,6 +200,8 @@ export function ActionsWorkspace() {
       pageSize: String(layout.viewMode === "kanban" ? 1000 : layout.pageSize),
     });
     if (q.trim()) params.set("q", q.trim());
+    if (workflowBucket) params.set("statut", workflowBucket);
+    if (categoryFilter) params.set("contactCategory", categoryFilter);
     for (const row of layout.filterRows) {
       if (row.value) params.set(row.field, row.value);
     }
@@ -158,7 +218,7 @@ export function ActionsWorkspace() {
       setTotal(data.total ?? 0);
     }
     setLoading(false);
-  }, [layout.filterRows, layout.pageSize, layout.sortRows, layout.viewMode, page, q]);
+  }, [categoryFilter, layout.filterRows, layout.pageSize, layout.sortRows, layout.viewMode, page, q, workflowBucket]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -173,6 +233,95 @@ export function ActionsWorkspace() {
   const pageIds = actions.map((a) => a.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
   const totalPages = Math.max(1, Math.ceil(total / layout.pageSize));
+
+  function toDateTimeLocal(value: string | Date | null | undefined) {
+    if (!value) return "";
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function openAction(action: ActionRow) {
+    setCreatingAction(false);
+    setActionError("");
+    setPeek(action);
+    setActionDraft({
+      contactId: action.contact.id,
+      channel: action.channel,
+      titre: action.titre,
+      contenu: action.contenu,
+      statut: action.statut,
+      datePrevue: toDateTimeLocal(action.datePrevue),
+    });
+  }
+
+  async function openCreateAction() {
+    setCreatingAction(true);
+    setActionError("");
+    setPeek({
+      id: "",
+      channel: "note",
+      titre: "",
+      contenu: "",
+      statut: workflowBucket || "a_faire",
+      datePrevue: null,
+      contact: { id: "", prenom: "", nom: "", category: "lead", company: null },
+    });
+    setActionDraft({
+      contactId: "",
+      channel: "note",
+      titre: "",
+      contenu: "",
+      statut: workflowBucket || "a_faire",
+      datePrevue: "",
+    });
+    const res = await fetch("/api/contacts?pageSize=200");
+    if (res.ok) {
+      const data = await res.json();
+      setContactOptions(
+        (data.data ?? []).map((contact: { id: string; prenom: string; nom: string }) => ({
+          id: contact.id,
+          label: contactDisplayName(contact),
+        })),
+      );
+    }
+  }
+
+  async function saveAction() {
+    if (!actionDraft.titre.trim()) {
+      setActionError("Titre requis");
+      return;
+    }
+    if (creatingAction && !actionDraft.contactId) {
+      setActionError("Choisissez un contact");
+      return;
+    }
+    setActionSaving(true);
+    setActionError("");
+    const payload = {
+      contactId: actionDraft.contactId,
+      channel: actionDraft.channel,
+      titre: actionDraft.titre.trim(),
+      contenu: actionDraft.contenu,
+      statut: actionDraft.statut,
+      datePrevue: actionDraft.datePrevue || null,
+    };
+    const res = await fetch(creatingAction ? "/api/actions" : `/api/actions/${peek?.id}`, {
+      method: creatingAction ? "POST" : "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setActionSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setActionError(data.error ?? "Enregistrement impossible");
+      return;
+    }
+    setPeek(null);
+    setCreatingAction(false);
+    await fetchActions();
+  }
 
   async function setActionStatut(id: string, statut: ActionStatut) {
     await fetch(`/api/actions/${id}`, {
@@ -286,6 +435,38 @@ export function ActionsWorkspace() {
     <div className="page">
       <div className="page-toolbar">
         <h1>Actions</h1>
+        <div className="seg">
+          {WORKFLOW_BUCKETS.map((bucket) => (
+            <button
+              key={bucket.label}
+              type="button"
+              className={workflowBucket === bucket.value ? "active" : ""}
+              onClick={() => {
+                setWorkflowBucket(bucket.value);
+                setPage(1);
+              }}
+            >
+              {bucket.label}
+            </button>
+          ))}
+        </div>
+        <select
+          className="select"
+          style={{ width: 170 }}
+          value={categoryFilter}
+          title="Filtrer par catégorie de contact"
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">Tous les contacts</option>
+          {PERSON_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {PERSON_CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
         <input
           className="input toolbar-input"
           placeholder="Rechercher (titre, contact…)"
@@ -399,14 +580,13 @@ export function ActionsWorkspace() {
             </div>
           ) : null}
         </div>
-        <div className="segmented">
-          <button type="button" className={layout.viewMode === "list" ? "active" : ""} onClick={() => setLayout((p) => ({ ...p, viewMode: "list" }))}>
-            Liste
-          </button>
-          <button type="button" className={layout.viewMode === "kanban" ? "active" : ""} onClick={() => setLayout((p) => ({ ...p, viewMode: "kanban" }))}>
-            Kanban
-          </button>
-        </div>
+        <button
+          className="btn secondary small"
+          type="button"
+          onClick={() => setLayout((p) => ({ ...p, viewMode: p.viewMode === "list" ? "kanban" : "list" }))}
+        >
+          {layout.viewMode === "list" ? "Vue Kanban (dates)" : "Vue Liste"}
+        </button>
         {selectedIds.length > 0 ? (
           <>
             <button className="btn small" type="button" onClick={() => void bulkComplete()}>
@@ -417,6 +597,9 @@ export function ActionsWorkspace() {
             </button>
           </>
         ) : null}
+        <button className="btn" type="button" onClick={() => void openCreateAction()}>
+          + Nouvelle action
+        </button>
         <div className="pagination-bar">
           <select
             className="select"
@@ -582,9 +765,7 @@ export function ActionsWorkspace() {
                     <tr
                       className={`row-link ${selectedIds.includes(action.id) ? "selected" : ""}`}
                       key={action.id}
-                      onClick={() => {
-                        window.location.href = `/contacts?contact=${action.contact.id}`;
-                      }}
+                      onClick={() => openAction(action)}
                     >
                       <td className="col-check" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -608,21 +789,26 @@ export function ActionsWorkspace() {
           )
         ) : (
           <div className="pipeline">
-            {ACTION_STATUTS.map((col) => {
-              const items = actions.filter((a) => a.statut === col);
+            {DATE_COLUMNS.map((col) => {
+              const items = actions.filter((action) => actionDateBucket(action.datePrevue) === col.key);
               return (
                 <section
                   className="column"
-                  key={col}
+                  key={col.key}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
                     const id = e.dataTransfer.getData("text/plain");
-                    if (id) void setActionStatut(id, col);
+                    if (!id) return;
+                    void fetch(`/api/actions/${id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ datePrevue: dateForBucket(col.key) }),
+                    }).then(() => fetchActions());
                   }}
                 >
                   <h2>
-                    <span>{ACTION_STATUT_LABELS[col]}</span>
+                    <span>{col.label}</span>
                     <span className="muted">{items.length}</span>
                   </h2>
                   {items.map((action) => (
@@ -631,9 +817,7 @@ export function ActionsWorkspace() {
                       draggable
                       key={action.id}
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", action.id)}
-                      onClick={() => {
-                        window.location.href = `/contacts?contact=${action.contact.id}`;
-                      }}
+                      onClick={() => openAction(action)}
                     >
                       <h3>{action.titre}</h3>
                       <p className="muted" style={{ margin: 0 }}>
@@ -667,6 +851,73 @@ export function ActionsWorkspace() {
           </div>
         </div>
       ) : null}
+
+      <SidePeek
+        open={!!peek}
+        title={creatingAction ? "Nouvelle action" : peek?.titre || "Action"}
+        onClose={() => {
+          setPeek(null);
+          setCreatingAction(false);
+        }}
+        actions={
+          <button className="btn small" type="button" disabled={actionSaving} onClick={() => void saveAction()}>
+            {actionSaving ? "…" : "Enregistrer"}
+          </button>
+        }
+      >
+        <div className="prop-sheet">
+          {actionError ? <p className="error">{actionError}</p> : null}
+          {creatingAction ? (
+            <PropertyRow label="Contact">
+              <select
+                className="select"
+                value={actionDraft.contactId}
+                onChange={(e) => setActionDraft((draft) => ({ ...draft, contactId: e.target.value }))}
+              >
+                <option value="">Choisir…</option>
+                {contactOptions.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.label}
+                  </option>
+                ))}
+              </select>
+            </PropertyRow>
+          ) : peek?.contact.id ? (
+            <PropertyRow label="Contact">
+              <a className="text-link" href={`/contacts?contact=${peek.contact.id}`}>
+                {contactDisplayName(peek.contact)}
+              </a>
+            </PropertyRow>
+          ) : null}
+          <PropertyRow label="Titre">
+            <input className="input" value={actionDraft.titre} onChange={(e) => setActionDraft((draft) => ({ ...draft, titre: e.target.value }))} />
+          </PropertyRow>
+          <PropertyRow label="Canal">
+            <select className="select" value={actionDraft.channel} onChange={(e) => setActionDraft((draft) => ({ ...draft, channel: e.target.value as ActionChannel }))}>
+              {ACTION_CHANNELS.map((channel) => (
+                <option key={channel} value={channel}>
+                  {ACTION_CHANNEL_LABELS[channel]}
+                </option>
+              ))}
+            </select>
+          </PropertyRow>
+          <PropertyRow label="État">
+            <select className="select" value={actionDraft.statut} onChange={(e) => setActionDraft((draft) => ({ ...draft, statut: e.target.value as ActionStatut }))}>
+              {ACTION_STATUTS.map((statut) => (
+                <option key={statut} value={statut}>
+                  {ACTION_STATUT_LABELS[statut]}
+                </option>
+              ))}
+            </select>
+          </PropertyRow>
+          <PropertyRow label="Date">
+            <input className="input" type="datetime-local" value={actionDraft.datePrevue} onChange={(e) => setActionDraft((draft) => ({ ...draft, datePrevue: e.target.value }))} />
+          </PropertyRow>
+          <PropertyRow label="Note">
+            <textarea className="textarea" value={actionDraft.contenu} onChange={(e) => setActionDraft((draft) => ({ ...draft, contenu: e.target.value }))} />
+          </PropertyRow>
+        </div>
+      </SidePeek>
 
       <CustomColumnModal
         open={columnModalOpen}

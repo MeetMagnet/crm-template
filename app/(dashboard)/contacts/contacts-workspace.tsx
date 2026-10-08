@@ -12,6 +12,7 @@ import {
   PERSON_CATEGORY_STATE_KEYS,
   PERSON_STATE_COLORS,
   PERSON_STATE_LABELS,
+  PROVENANCE_OPTIONS,
   contactDisplayName,
   formatDate,
 } from "@/lib/labels";
@@ -51,6 +52,32 @@ type SavedView = {
 
 const STORAGE_KEY = "crm-contacts-default-layout";
 
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function nextActionBucket(value: string | Date | null | undefined) {
+  if (!value) return "none";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "none";
+  const diff = (startOfDay(date).getTime() - startOfDay(new Date()).getTime()) / 86400000;
+  if (diff < 0) return "overdue";
+  if (diff === 0) return "today";
+  if (diff <= 7) return "week";
+  return "later";
+}
+
+function dateForActionBucket(bucket: string) {
+  const today = startOfDay(new Date());
+  if (bucket === "none") return null;
+  if (bucket === "overdue") today.setDate(today.getDate() - 1);
+  if (bucket === "week") today.setDate(today.getDate() + 3);
+  if (bucket === "later") today.setDate(today.getDate() + 14);
+  return today.toISOString().slice(0, 10);
+}
+
 const BASE_COLUMN_DEFS: ColumnDef[] = [
   { key: "name", label: "Nom" },
   { key: "company", label: "Entreprise" },
@@ -67,7 +94,7 @@ const BASE_COLUMN_DEFS: ColumnDef[] = [
 const FILTER_FIELDS = [
   { key: "category", label: "Catégorie", type: "enum" as const },
   { key: "state", label: "État", type: "enum" as const },
-  { key: "source", label: "Source", type: "text" as const },
+  { key: "source", label: "Provenance", type: "enum" as const },
   { key: "email", label: "E-mail", type: "text" as const },
   { key: "telephone", label: "Téléphone", type: "text" as const },
   { key: "poste", label: "Poste", type: "text" as const },
@@ -148,6 +175,8 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [saveViewName, setSaveViewName] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState("");
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkState, setBulkState] = useState("");
   const [dragCol, setDragCol] = useState<string | null>(null);
@@ -332,6 +361,8 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
       category: PersonCategory;
       state: PersonState;
       companyId: string;
+      prochaineActionTitre: string;
+      prochaineActionDate: string;
     },
     fields: Record<string, unknown>,
   ) {
@@ -352,6 +383,8 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
       category: draft.category,
       state: draft.state,
       companyId: draft.companyId || null,
+      prochaineActionTitre: draft.prochaineActionTitre,
+      prochaineActionDate: draft.prochaineActionDate || null,
       customFields: fields,
     };
     const url = creating || !selected.id ? "/api/contacts" : `/api/contacts/${selected.id}`;
@@ -385,7 +418,10 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
     await fetchContacts();
   }
 
-  async function moveContact(contactId: string, next: { state?: PersonState; category?: PersonCategory }) {
+  async function moveContact(
+    contactId: string,
+    next: { state?: PersonState; category?: PersonCategory; prochaineActionDate?: string | null },
+  ) {
     setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, ...next } : c)));
     await fetch(`/api/contacts/${contactId}`, {
       method: "PATCH",
@@ -429,6 +465,23 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", ids: selectedIds }),
     });
+    setSelectedIds([]);
+    await fetchContacts();
+  }
+
+  async function bulkMerge() {
+    if (selectedIds.length < 2 || !mergeTargetId) return;
+    const res = await fetch("/api/contacts/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "merge", ids: selectedIds, targetId: mergeTargetId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Migration impossible");
+      return;
+    }
+    setMergeOpen(false);
     setSelectedIds([]);
     await fetchContacts();
   }
@@ -517,6 +570,19 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
         key,
         label: PERSON_CATEGORY_LABELS[key],
         items: contacts.filter((c) => c.category === key),
+      }));
+    }
+    if (layout.kanbanGroupBy === "next_action_date") {
+      const buckets = [
+        { key: "overdue", label: "En retard" },
+        { key: "today", label: "Aujourd'hui" },
+        { key: "week", label: "7 prochains jours" },
+        { key: "later", label: "Plus tard" },
+        { key: "none", label: "Sans date" },
+      ];
+      return buckets.map((bucket) => ({
+        ...bucket,
+        items: contacts.filter((contact) => nextActionBucket(contact.prochaineActionDate) === bucket.key),
       }));
     }
     const keys = PERSON_CATEGORY_STATE_KEYS.lead.concat(
@@ -691,18 +757,29 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
             Kanban
           </button>
         </div>
-        {layout.viewMode === "kanban" ? (
-          <select
-            className="select"
-            style={{ width: 150 }}
-            value={layout.kanbanGroupBy}
-            onChange={(e) => setLayout((p) => ({ ...p, kanbanGroupBy: e.target.value }))}
-          >
-            <option value="state">Par état</option>
-            <option value="category">Par catégorie</option>
-          </select>
-        ) : null}
+        <select
+          className="select"
+          style={{ width: 190 }}
+          value={layout.kanbanGroupBy}
+          onChange={(e) => setLayout((p) => ({ ...p, kanbanGroupBy: e.target.value }))}
+        >
+          <option value="state">Par état</option>
+          <option value="category">Par catégorie</option>
+          <option value="next_action_date">Par date de l&apos;action</option>
+        </select>
 
+        {selectedIds.length > 1 ? (
+          <button
+            className="btn small"
+            type="button"
+            onClick={() => {
+              setMergeTargetId(selectedIds[0] ?? "");
+              setMergeOpen(true);
+            }}
+          >
+            Migrer ({selectedIds.length})
+          </button>
+        ) : null}
         {selectedIds.length > 0 ? (
           <>
             <button className="btn small" type="button" onClick={() => setBulkOpen(true)}>
@@ -715,7 +792,7 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
         ) : null}
 
         <button className="btn" type="button" onClick={openCreate}>
-          Nouveau contact
+          + Ajouter contact
         </button>
 
         <div className="pagination-bar">
@@ -817,6 +894,26 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
                   {(Object.keys(PERSON_STATE_LABELS) as PersonState[]).map((s) => (
                     <option key={s} value={s}>
                       {PERSON_STATE_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              ) : row.field === "source" ? (
+                <select
+                  className="select"
+                  style={{ width: 220 }}
+                  value={row.value}
+                  onChange={(e) => {
+                    setLayout((prev) => ({
+                      ...prev,
+                      filterRows: prev.filterRows.map((r) => (r.id === row.id ? { ...r, value: e.target.value } : r)),
+                    }));
+                    setPage(1);
+                  }}
+                >
+                  <option value="">—</option>
+                  {PROVENANCE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
                     </option>
                   ))}
                 </select>
@@ -1022,6 +1119,8 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
                   if (!contactId) return;
                   if (layout.kanbanGroupBy === "category") {
                     void moveContact(contactId, { category: col.key as PersonCategory });
+                  } else if (layout.kanbanGroupBy === "next_action_date") {
+                    void moveContact(contactId, { prochaineActionDate: dateForActionBucket(col.key) });
                   } else {
                     void moveContact(contactId, { state: col.key as PersonState });
                   }
@@ -1070,6 +1169,35 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
               </button>
               <button className="btn small" type="button" onClick={() => void saveCurrentView()}>
                 Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {mergeOpen ? (
+        <div className="modal-backdrop" onClick={() => setMergeOpen(false)}>
+          <div className="modal-card form-grid" onClick={(e) => e.stopPropagation()}>
+            <h3>Migrer {selectedIds.length} contacts</h3>
+            <p className="muted">Le contact conservé récupère les actions et les champs vides. Les autres fiches sont supprimées.</p>
+            <label>
+              Conserver
+              <select className="select" value={mergeTargetId} onChange={(e) => setMergeTargetId(e.target.value)}>
+                {contacts
+                  .filter((contact) => selectedIds.includes(contact.id))
+                  .map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contactDisplayName(contact)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn secondary small" type="button" onClick={() => setMergeOpen(false)}>
+                Annuler
+              </button>
+              <button className="btn small" type="button" onClick={() => void bulkMerge()}>
+                Migrer
               </button>
             </div>
           </div>
@@ -1170,6 +1298,7 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
               onSave={(draft, fields) => void saveContact(draft, fields)}
               onCreateAction={(input) => void createAction(input)}
               onSetStatut={(actionId, statut) => void setActionStatut(actionId, statut)}
+              onOpenCompany={(companyId) => router.push(`/companies?company=${companyId}`)}
             />
           </>
         ) : null}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { bulkDeleteContacts, bulkUpdateContacts } from "@/lib/contacts";
+import { bulkDeleteContacts, bulkUpdateContacts, mergeContacts } from "@/lib/contacts";
 import { isPersonCategory, isPersonState } from "@/lib/labels";
 
 export async function POST(request: Request) {
@@ -36,6 +36,20 @@ export async function POST(request: Request) {
     }
     const updated = await bulkUpdateContacts(ids, patch as never, user?.id);
     return NextResponse.json({ ok: true, count: updated.length });
+  }
+
+  if (action === "merge") {
+    const targetId = typeof body.targetId === "string" ? body.targetId : "";
+    if (!targetId || !ids.includes(targetId)) {
+      return NextResponse.json({ error: "Choisissez le contact à conserver" }, { status: 400 });
+    }
+    try {
+      const contact = await mergeContacts(targetId, ids);
+      return NextResponse.json({ ok: true, contact });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Migration impossible";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 });

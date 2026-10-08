@@ -9,10 +9,15 @@ import {
   ACTION_CHANNEL_LABELS,
   ACTION_STATUT_LABELS,
   PERSON_CATEGORIES,
+  PERSON_CATEGORY_DEFAULT_STATES,
   PERSON_CATEGORY_LABELS,
   PERSON_CATEGORY_STATE_KEYS,
+  PERSON_STATE_CATEGORY_MAP,
   PERSON_STATE_LABELS,
+  PROVENANCE_OPTIONS,
   formatDateTime,
+  formatProvenance,
+  parseProvenance,
 } from "@/lib/labels";
 
 type HistoryRow = {
@@ -67,7 +72,16 @@ type Draft = {
   category: PersonCategory;
   state: PersonState;
   companyId: string;
+  prochaineActionTitre: string;
+  prochaineActionDate: string;
 };
+
+function toDateInput(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
 
 function toDraft(contact: ContactSheetData): Draft {
   return {
@@ -84,7 +98,26 @@ function toDraft(contact: ContactSheetData): Draft {
     category: contact.category,
     state: contact.state,
     companyId: contact.companyId ?? "",
+    prochaineActionTitre: contact.prochaineActionTitre ?? "",
+    prochaineActionDate: toDateInput(contact.prochaineActionDate),
   };
+}
+
+function journeyLabel(history: HistoryRow[]) {
+  if (!history.length) return "";
+  const ordered = [...history].reverse();
+  const labels: string[] = [];
+  const first = ordered[0];
+  if (first?.previousState) labels.push(PERSON_STATE_LABELS[first.previousState]);
+  for (const row of ordered) labels.push(PERSON_STATE_LABELS[row.newState]);
+  return labels.join(" → ");
+}
+
+function linkedinHref(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
 }
 
 export function ContactSheet({
@@ -99,6 +132,7 @@ export function ContactSheet({
   onSave,
   onCreateAction,
   onSetStatut,
+  onOpenCompany,
 }: {
   contact: ContactSheetData;
   creating: boolean;
@@ -111,6 +145,7 @@ export function ContactSheet({
   onSave: (draft: Draft, fields: Record<string, unknown>) => void;
   onCreateAction: (input: { channel: ActionChannel; titre: string; contenu: string; datePrevue: string }) => void;
   onSetStatut: (actionId: string, statut: ActionStatut) => void;
+  onOpenCompany?: (companyId: string) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(contact));
   const [tab, setTab] = useState<"info" | "actions">("info");
@@ -130,8 +165,10 @@ export function ContactSheet({
       category: contact.category,
       state: contact.state,
       companyId: contact.companyId ?? current.companyId,
+      prochaineActionTitre: contact.prochaineActionTitre ?? "",
+      prochaineActionDate: toDateInput(contact.prochaineActionDate),
     }));
-  }, [contact.updatedAt, contact.category, contact.state, contact.companyId]);
+  }, [contact.updatedAt, contact.category, contact.state, contact.companyId, contact.prochaineActionTitre, contact.prochaineActionDate]);
 
   function commit(patch: Partial<Draft>, fields = customFields) {
     const next = { ...draft, ...patch };
@@ -140,8 +177,10 @@ export function ContactSheet({
     return next;
   }
 
-  const showDetails = Boolean(draft.adresse || draft.pays || draft.description);
   const history = contact.stateHistory ?? [];
+  const provenance = parseProvenance(draft.source);
+  const linkedin = linkedinHref(draft.linkedinUrl);
+  const companyName = companies.find((company) => company.id === draft.companyId)?.nom;
 
   return (
     <>
@@ -162,39 +201,16 @@ export function ContactSheet({
           <PropertyRow label="Nom">
             <input className="input" value={draft.nom} onChange={(e) => setDraft({ ...draft, nom: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="E-mail">
-            <input className="input" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} onBlur={() => commit({})} />
-          </PropertyRow>
-          <PropertyRow label="Téléphone">
-            <input className="input" value={draft.telephone} onChange={(e) => setDraft({ ...draft, telephone: e.target.value })} onBlur={() => commit({})} />
-          </PropertyRow>
-          <PropertyRow label="Poste">
-            <input className="input" value={draft.poste} onChange={(e) => setDraft({ ...draft, poste: e.target.value })} onBlur={() => commit({})} />
-          </PropertyRow>
-          <PropertyRow label="Entreprise">
-            <select className="select" value={draft.companyId} onChange={(e) => commit({ companyId: e.target.value })}>
-              <option value="">Aucune</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.nom}
-                </option>
-              ))}
-            </select>
-          </PropertyRow>
-          <PropertyRow label="Catégorie">
-            <select className="select" value={draft.category} onChange={(e) => commit({ category: e.target.value as PersonCategory })}>
-              {PERSON_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {PERSON_CATEGORY_LABELS[category]}
-                </option>
-              ))}
-            </select>
-          </PropertyRow>
           <PropertyRow label="État">
-            <select className="select" value={draft.state} onChange={(e) => commit({ state: e.target.value as PersonState })}>
-              {PERSON_CATEGORIES.every((category) => !PERSON_CATEGORY_STATE_KEYS[category].includes(draft.state)) ? (
-                <option value={draft.state}>{PERSON_STATE_LABELS[draft.state]}</option>
-              ) : null}
+            <select
+              className="select"
+              value={draft.state}
+              onChange={(e) => {
+                const state = e.target.value as PersonState;
+                const mapped = PERSON_STATE_CATEGORY_MAP[state];
+                commit({ state, category: mapped ?? draft.category });
+              }}
+            >
               {PERSON_CATEGORIES.map((category) => (
                 <optgroup key={category} label={PERSON_CATEGORY_LABELS[category]}>
                   {PERSON_CATEGORY_STATE_KEYS[category].map((state) => (
@@ -206,12 +222,124 @@ export function ContactSheet({
               ))}
             </select>
           </PropertyRow>
+          <PropertyRow label="Catégorie">
+            <select
+              className="select"
+              value={draft.category}
+              onChange={(e) => {
+                const category = e.target.value as PersonCategory;
+                commit({ category, state: PERSON_CATEGORY_DEFAULT_STATES[category] });
+              }}
+            >
+              {PERSON_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {PERSON_CATEGORY_LABELS[category]}
+                </option>
+              ))}
+            </select>
+          </PropertyRow>
+          <PropertyRow label="Email">
+            <input className="input" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} onBlur={() => commit({})} />
+          </PropertyRow>
+          <PropertyRow label="Téléphone">
+            <input className="input" value={draft.telephone} onChange={(e) => setDraft({ ...draft, telephone: e.target.value })} onBlur={() => commit({})} />
+          </PropertyRow>
+          <PropertyRow label="Prochaine action">
+            <div className="next-action-box">
+              <input
+                className="input"
+                value={draft.prochaineActionTitre}
+                placeholder="Titre de la prochaine action…"
+                onChange={(e) => setDraft({ ...draft, prochaineActionTitre: e.target.value })}
+                onBlur={() => commit({})}
+              />
+              <input
+                className="input"
+                type="date"
+                value={draft.prochaineActionDate}
+                onChange={(e) => commit({ prochaineActionDate: e.target.value })}
+              />
+            </div>
+          </PropertyRow>
+          <PropertyRow label="Entreprise">
+            <div className="stack-tight">
+              <select className="select" value={draft.companyId} onChange={(e) => commit({ companyId: e.target.value })}>
+                <option value="">Aucune</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.nom}
+                  </option>
+                ))}
+              </select>
+              {draft.companyId && companyName && onOpenCompany ? (
+                <button className="text-link" type="button" onClick={() => onOpenCompany(draft.companyId)}>
+                  Voir la fiche entreprise →
+                </button>
+              ) : null}
+            </div>
+          </PropertyRow>
           <PropertyRow label="LinkedIn">
-            <input className="input" value={draft.linkedinUrl} onChange={(e) => setDraft({ ...draft, linkedinUrl: e.target.value })} onBlur={() => commit({})} />
+            <div className="inline-field">
+              <input
+                className="input"
+                value={draft.linkedinUrl}
+                placeholder="https://www.linkedin.com/in/…"
+                onChange={(e) => setDraft({ ...draft, linkedinUrl: e.target.value })}
+                onBlur={() => commit({})}
+              />
+              {linkedin ? (
+                <a className="text-link" href={linkedin} target="_blank" rel="noreferrer">
+                  Ouvrir
+                </a>
+              ) : null}
+            </div>
+          </PropertyRow>
+          <PropertyRow label="Poste">
+            <input className="input" value={draft.poste} onChange={(e) => setDraft({ ...draft, poste: e.target.value })} onBlur={() => commit({})} />
+          </PropertyRow>
+          <PropertyRow label="Description">
+            <textarea
+              className="textarea"
+              rows={4}
+              placeholder="Description du contact"
+              value={draft.description}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              onBlur={() => commit({})}
+            />
+          </PropertyRow>
+          <PropertyRow label="Adresse">
+            <input className="input" placeholder="Adresse postale" value={draft.adresse} onChange={(e) => setDraft({ ...draft, adresse: e.target.value })} onBlur={() => commit({})} />
+          </PropertyRow>
+          <PropertyRow label="Pays">
+            <input className="input" placeholder="Pays" value={draft.pays} onChange={(e) => setDraft({ ...draft, pays: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
           <PropertyRow label="Provenance">
-            <input className="input" value={draft.source} placeholder="Site, LinkedIn, salon…" onChange={(e) => setDraft({ ...draft, source: e.target.value })} onBlur={() => commit({})} />
+            <div className="choice-chips">
+              {PROVENANCE_OPTIONS.map((option) => {
+                const active = provenance.some((value) => value.toLowerCase() === option.toLowerCase());
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    className={active ? "choice-chip active" : "choice-chip"}
+                    onClick={() => {
+                      const next = active
+                        ? provenance.filter((value) => value.toLowerCase() !== option.toLowerCase())
+                        : [...provenance, option];
+                      commit({ source: formatProvenance(next) });
+                    }}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
           </PropertyRow>
+          {history.length > 0 ? (
+            <PropertyRow label="Parcours">
+              <p className="journey">{journeyLabel(history)}</p>
+            </PropertyRow>
+          ) : null}
           <div
             onBlur={() => {
               if (!creating) commit({}, customFields);
@@ -224,39 +352,8 @@ export function ContactSheet({
               onChange={(key, value) => onCustomFields({ ...customFields, [key]: value })}
             />
           </div>
-          <details className="prop-details" open={showDetails}>
-            <summary>Adresse et description</summary>
-            <PropertyRow label="Adresse">
-              <input className="input" value={draft.adresse} onChange={(e) => setDraft({ ...draft, adresse: e.target.value })} onBlur={() => commit({})} />
-            </PropertyRow>
-            <PropertyRow label="Pays">
-              <input className="input" value={draft.pays} onChange={(e) => setDraft({ ...draft, pays: e.target.value })} onBlur={() => commit({})} />
-            </PropertyRow>
-            <PropertyRow label="Description">
-              <textarea className="textarea" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} onBlur={() => commit({})} />
-            </PropertyRow>
-          </details>
-          {contact.prochaineActionTitre ? (
-            <p className="prop-note">
-              Prochaine action : {contact.prochaineActionTitre}
-              {contact.prochaineActionDate ? ` · ${formatDateTime(contact.prochaineActionDate)}` : ""}
-            </p>
-          ) : null}
-          {history.length > 0 ? (
-            <div className="prop-history">
-              <p className="prop-label">Parcours</p>
-              <ul>
-                {history.slice(0, 6).map((row) => (
-                  <li key={row.id}>
-                    <span>{formatDateTime(row.createdAt)}</span>
-                    {row.previousState ? PERSON_STATE_LABELS[row.previousState] : "Création"} → {PERSON_STATE_LABELS[row.newState]}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           <div className="prop-actions">
-            <span className="sheet-status">{saving ? "Enregistrement…" : creating ? "" : "Les changements sont enregistrés au fil de la saisie."}</span>
+            <span className="sheet-status">{saving ? "Enregistrement…" : creating ? "" : "Enregistré au fil de la saisie."}</span>
             {creating ? (
               <button className="btn" type="button" disabled={saving} onClick={() => onSave(draft, customFields)}>
                 Créer le contact

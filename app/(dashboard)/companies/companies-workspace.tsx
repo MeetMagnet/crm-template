@@ -96,6 +96,10 @@ export function CompaniesWorkspace() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [migrateTargetId, setMigrateTargetId] = useState("");
+  const [migrateOptions, setMigrateOptions] = useState<Array<{ id: string; nom: string }>>([]);
+  const [migrateError, setMigrateError] = useState("");
 
   useEffect(() => {
     setLayout(loadLayout(STORAGE_KEY, DEFAULT_LAYOUT));
@@ -292,6 +296,37 @@ export function CompaniesWorkspace() {
     await fetchCompanies();
   }
 
+  async function openMigrate() {
+    setMigrateError("");
+    setMigrateTargetId("");
+    const res = await fetch("/api/companies?pageSize=200");
+    if (res.ok) {
+      const data = await res.json();
+      setMigrateOptions((data.data ?? []).map((company: { id: string; nom: string }) => ({ id: company.id, nom: company.nom })));
+    }
+    setMigrateOpen(true);
+  }
+
+  async function confirmMigrate() {
+    if (!migrateTargetId || selectedIds.includes(migrateTargetId)) {
+      setMigrateError("Choisissez une entreprise cible différente des entreprises sélectionnées.");
+      return;
+    }
+    const res = await fetch("/api/companies/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "migrate", ids: selectedIds, targetId: migrateTargetId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setMigrateError(data.error ?? "Échec de la migration.");
+      return;
+    }
+    setMigrateOpen(false);
+    setSelectedIds([]);
+    await fetchCompanies();
+  }
+
   function applySavedView(viewId: string) {
     setSelectedViewId(viewId);
     if (!viewId) return;
@@ -470,8 +505,13 @@ export function CompaniesWorkspace() {
             Supprimer ({selectedIds.length})
           </button>
         ) : null}
+        {selectedIds.length > 0 ? (
+          <button className="btn small" type="button" style={{ background: "#2e7bb8" }} onClick={() => void openMigrate()}>
+            Migrer ({selectedIds.length})
+          </button>
+        ) : null}
         <button className="btn" type="button" onClick={openCreate}>
-          Nouvelle entreprise
+          + Nouvelle entreprise
         </button>
         <div className="pagination-bar">
           <select
@@ -707,6 +747,37 @@ export function CompaniesWorkspace() {
               </button>
               <button className="btn small" type="button" onClick={() => void saveCurrentView()}>
                 Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {migrateOpen ? (
+        <div className="modal-backdrop" onClick={() => setMigrateOpen(false)}>
+          <div className="modal-card form-grid" onClick={(e) => e.stopPropagation()}>
+            <h3>Migrer les contacts</h3>
+            <p className="muted">Les contacts des entreprises sélectionnées rejoignent la cible. Les entreprises sources sont ensuite supprimées.</p>
+            <label>
+              Entreprise cible
+              <select className="select" value={migrateTargetId} onChange={(e) => setMigrateTargetId(e.target.value)}>
+                <option value="">Choisir…</option>
+                {migrateOptions
+                  .filter((company) => !selectedIds.includes(company.id))
+                  .map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.nom}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            {migrateError ? <p className="error">{migrateError}</p> : null}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn secondary small" type="button" onClick={() => setMigrateOpen(false)}>
+                Annuler
+              </button>
+              <button className="btn small" type="button" disabled={!migrateTargetId} onClick={() => void confirmMigrate()}>
+                Migrer et supprimer
               </button>
             </div>
           </div>

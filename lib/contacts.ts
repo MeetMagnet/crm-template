@@ -276,6 +276,84 @@ export async function bulkDeleteContacts(ids: string[]) {
   return prisma.contact.deleteMany({ where: { id: { in: ids } } });
 }
 
+function firstFilled(current: string | null, incoming: string | null) {
+  if (current && current.trim()) return current;
+  return incoming && incoming.trim() ? incoming : current;
+}
+
+/** Fusionne les contacts sources dans la cible, puis les supprime. */
+export async function mergeContacts(targetId: string, sourceIds: string[]) {
+  const ids = [...new Set(sourceIds.filter((id) => id && id !== targetId))];
+  if (!ids.length) throw new Error("Sélectionnez au moins deux contacts");
+
+  return prisma.$transaction(async (tx) => {
+    const target = await tx.contact.findUnique({ where: { id: targetId } });
+    if (!target) throw new Error("Contact cible introuvable");
+    const sources = await tx.contact.findMany({ where: { id: { in: ids } } });
+    if (!sources.length) throw new Error("Aucun contact à migrer");
+
+    const provenance = formatProvenanceImport([
+      ...parseProvenanceImport(target.source),
+      ...sources.flatMap((source) => parseProvenanceImport(source.source)),
+    ]);
+
+    await tx.action.updateMany({
+      where: { contactId: { in: ids } },
+      data: { contactId: targetId },
+    });
+    await tx.contactStateHistory.updateMany({
+      where: { contactId: { in: ids } },
+      data: { contactId: targetId },
+    });
+
+    await tx.contact.update({
+      where: { id: targetId },
+      data: {
+        prenom: firstFilled(target.prenom, sources.find((s) => s.prenom)?.prenom ?? null) ?? "",
+        nom: firstFilled(target.nom, sources.find((s) => s.nom)?.nom ?? null) ?? "",
+        email: firstFilled(target.email, sources.find((s) => s.email)?.email ?? null),
+        telephone: firstFilled(target.telephone, sources.find((s) => s.telephone)?.telephone ?? null),
+        poste: firstFilled(target.poste, sources.find((s) => s.poste)?.poste ?? null),
+        linkedinUrl: firstFilled(target.linkedinUrl, sources.find((s) => s.linkedinUrl)?.linkedinUrl ?? null),
+        description: firstFilled(target.description, sources.find((s) => s.description)?.description ?? null),
+        adresse: firstFilled(target.adresse, sources.find((s) => s.adresse)?.adresse ?? null),
+        pays: firstFilled(target.pays, sources.find((s) => s.pays)?.pays ?? null),
+        source: provenance || null,
+        companyId: target.companyId ?? sources.find((s) => s.companyId)?.companyId ?? null,
+      },
+    });
+
+    await tx.contact.deleteMany({ where: { id: { in: ids } } });
+    return targetId;
+  }).then(async (id) => {
+    await refreshContactNextAction(id);
+    return prisma.contact.findUniqueOrThrow({
+      where: { id },
+      include: { company: true },
+    });
+  });
+}
+
+function parseProvenanceImport(source: string | null) {
+  if (!source) return [];
+  return source
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function formatProvenanceImport(values: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out.join(", ");
+}
+
 export async function refreshContactNextAction(contactId: string) {
   const next = await prisma.action.findFirst({
     where: { contactId, statut: { not: "termine" } },

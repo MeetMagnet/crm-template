@@ -24,8 +24,16 @@ function formatDay(iso: string) {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatWeekRange(weekStart: string) {
+  const start = new Date(`${weekStart}T12:00:00Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
+  const endIso = end.toISOString().slice(0, 10);
+  return `${formatDay(weekStart)} → ${formatDay(endIso)}`;
+}
+
 export function CommercialView() {
-  const [tab, setTab] = useState<"activity" | "cohorts">("activity");
+  const [tab, setTab] = useState<"activity" | "cohorts">("cohorts");
   const [weeks, setWeeks] = useState(13);
   const [scope, setScope] = useState<"global" | "dated">("global");
   const [preset, setPreset] = useState("13w");
@@ -172,7 +180,7 @@ export function CommercialView() {
               <tbody>
                 {[...stats.activity.weeks].reverse().map((week) => (
                   <tr key={week.weekStart}>
-                    <td>{formatDay(week.weekStart)}</td>
+                    <td>{formatWeekRange(week.weekStart)}</td>
                     <td className="num">{week.newContacts}</td>
                     <td className="num">{week.rdv1Count}</td>
                     <td className="num">{week.meetings}</td>
@@ -194,13 +202,15 @@ export function CommercialView() {
       {stats && tab === "cohorts" ? (
         <section className="stats-block">
           <div className="stats-toolbar">
-            <span>Période</span>
-            <button type="button" className={scope === "global" ? "chip active" : "chip"} onClick={() => setScope("global")}>
-              Globale
-            </button>
-            <button type="button" className={scope === "dated" ? "chip active" : "chip"} onClick={() => setScope("dated")}>
-              Datée
-            </button>
+            <span>Périmètre</span>
+            <div className="seg">
+              <button type="button" className={scope === "global" ? "active" : ""} onClick={() => setScope("global")}>
+                Globale
+              </button>
+              <button type="button" className={scope === "dated" ? "active" : ""} onClick={() => setScope("dated")}>
+                Datée
+              </button>
+            </div>
             {scope === "dated"
               ? [
                   { id: "4w", label: "4 sem." },

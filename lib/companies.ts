@@ -146,3 +146,20 @@ export async function deleteCompany(id: string) {
 export async function bulkDeleteCompanies(ids: string[]) {
   return prisma.company.deleteMany({ where: { id: { in: ids } } });
 }
+
+/** Déplace les contacts des entreprises sources vers la cible, puis supprime les sources. */
+export async function migrateCompanies(targetId: string, sourceIds: string[]) {
+  const ids = [...new Set(sourceIds.filter((id) => id && id !== targetId))];
+  if (!ids.length) throw new Error("Choisissez une entreprise cible différente");
+  const target = await prisma.company.findUnique({ where: { id: targetId } });
+  if (!target) throw new Error("Entreprise cible introuvable");
+
+  return prisma.$transaction(async (tx) => {
+    const moved = await tx.contact.updateMany({
+      where: { companyId: { in: ids } },
+      data: { companyId: targetId },
+    });
+    await tx.company.deleteMany({ where: { id: { in: ids } } });
+    return { moved: moved.count, deleted: ids.length };
+  });
+}

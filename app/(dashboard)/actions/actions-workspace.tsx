@@ -326,6 +326,7 @@ export function ActionsWorkspace() {
   }
 
   async function setActionStatut(id: string, statut: ActionStatut) {
+    const previous = actions.find((action) => action.id === id);
     setActions((prev) => prev.map((action) => (action.id === id ? { ...action, statut } : action)));
     setPeek((current) => (current?.id === id ? { ...current, statut } : current));
     setActionDraft((draft) => (peek?.id === id ? { ...draft, statut } : draft));
@@ -334,9 +335,11 @@ export function ActionsWorkspace() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ statut }),
     });
-    if (!res.ok || !workflowBucket || workflowBucket === statut) {
-      await fetchActions();
+    if (!res.ok && previous) {
+      setPeek((current) => (current?.id === id ? previous : current));
+      setActionDraft((draft) => (peek?.id === id ? { ...draft, statut: previous.statut } : draft));
     }
+    await fetchActions();
   }
 
   async function bulkDelete() {

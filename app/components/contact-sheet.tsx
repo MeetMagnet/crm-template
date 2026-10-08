@@ -20,6 +20,7 @@ import {
   formatDateTime,
   formatProvenance,
   parseProvenance,
+  toDateInputValue,
 } from "@/lib/labels";
 
 type HistoryRow = {
@@ -79,10 +80,7 @@ type Draft = {
 };
 
 function toDateInput(value: string | Date | null | undefined) {
-  if (!value) return "";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  return toDateInputValue(value);
 }
 
 function toDraft(contact: ContactSheetData): Draft {

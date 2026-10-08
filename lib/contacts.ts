@@ -233,12 +233,12 @@ export async function createContact(input: ContactInput, changedById?: string) {
     });
 
     const titre = cleanOptional(input.prochaineActionTitre);
-    if (titre) {
+    if (titre || input.prochaineActionDate) {
       await tx.action.create({
         data: {
           contactId: contact.id,
           channel: "note",
-          titre,
+          titre: titre || "Action",
           contenu: "",
           statut: "a_faire",
           datePrevue: input.prochaineActionDate ?? null,
@@ -354,6 +354,20 @@ function firstFilled(current: string | null, incoming: string | null) {
   return incoming && incoming.trim() ? incoming : current;
 }
 
+function isEmptyCustomValue(value: unknown) {
+  return value === undefined || value === null || value === "";
+}
+
+function mergeCustomFields(targetRaw: string, sourceRaws: string[]) {
+  const merged = parseCustomFields(targetRaw);
+  for (const raw of sourceRaws) {
+    for (const [key, value] of Object.entries(parseCustomFields(raw))) {
+      if (isEmptyCustomValue(merged[key]) && !isEmptyCustomValue(value)) merged[key] = value;
+    }
+  }
+  return stringifyCustomFields(merged);
+}
+
 /** Fusionne les contacts sources dans la cible, puis les supprime. */
 export async function mergeContacts(targetId: string, sourceIds: string[]) {
   const ids = [...new Set(sourceIds.filter((id) => id && id !== targetId))];
@@ -393,6 +407,7 @@ export async function mergeContacts(targetId: string, sourceIds: string[]) {
         pays: firstFilled(target.pays, sources.find((s) => s.pays)?.pays ?? null),
         source: provenance || null,
         companyId: target.companyId ?? sources.find((s) => s.companyId)?.companyId ?? null,
+        customFields: mergeCustomFields(target.customFields, sources.map((source) => source.customFields)),
       },
     });
 
@@ -471,6 +486,13 @@ async function syncEditedNextAction(
     open.find((action) => action.titre === current.prochaineActionTitre) ?? pickNextOpenAction(open);
 
   if (displayed) {
+    if (titleChanged && !nextTitle) {
+      await prisma.action.update({
+        where: { id: displayed.id },
+        data: { statut: "termine", dateRealisation: new Date() },
+      });
+      return;
+    }
     await prisma.action.update({
       where: { id: displayed.id },
       data: {
@@ -481,12 +503,13 @@ async function syncEditedNextAction(
     return;
   }
 
-  if (!nextTitle) return;
+  const createdTitle = nextTitle || (dateProvided && input.prochaineActionDate ? "Action" : null);
+  if (!createdTitle) return;
   await prisma.action.create({
     data: {
       contactId,
       channel: "note",
-      titre: nextTitle,
+      titre: createdTitle,
       contenu: "",
       statut: "a_faire",
       datePrevue: dateProvided ? (input.prochaineActionDate ?? null) : null,

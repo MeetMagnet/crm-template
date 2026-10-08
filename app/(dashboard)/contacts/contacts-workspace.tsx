@@ -15,6 +15,7 @@ import {
   PROVENANCE_OPTIONS,
   contactDisplayName,
   formatDate,
+  toDateInputValue,
 } from "@/lib/labels";
 import {
   PAGE_SIZE_OPTIONS,
@@ -384,7 +385,11 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
       state: draft.state,
       companyId: draft.companyId || null,
       prochaineActionTitre: draft.prochaineActionTitre,
-      prochaineActionDate: draft.prochaineActionDate || null,
+      prochaineActionDate:
+        draft.prochaineActionDate &&
+        draft.prochaineActionDate === toDateInputValue(selected.prochaineActionDate)
+          ? selected.prochaineActionDate
+          : draft.prochaineActionDate || null,
       customFields: fields,
     };
     const url = creating || !selected.id ? "/api/contacts" : `/api/contacts/${selected.id}`;

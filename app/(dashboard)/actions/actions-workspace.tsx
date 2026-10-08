@@ -7,6 +7,7 @@ import {
   ACTION_CHANNEL_LABELS,
   ACTION_STATUTS,
   ACTION_STATUT_LABELS,
+  actionStatutBadgeClass,
   PERSON_CATEGORIES,
   PERSON_CATEGORY_LABELS,
   contactDisplayName,
@@ -423,7 +424,7 @@ export function ActionsWorkspace() {
       case "channel":
         return ACTION_CHANNEL_LABELS[action.channel];
       case "statut":
-        return <span className="badge badge-gray">{ACTION_STATUT_LABELS[action.statut]}</span>;
+        return <span className={actionStatutBadgeClass(action.statut)}>{ACTION_STATUT_LABELS[action.statut]}</span>;
       case "datePrevue":
         return <span className="muted">{formatDateTime(action.datePrevue)}</span>;
       default:
@@ -813,7 +814,7 @@ export function ActionsWorkspace() {
                   </h2>
                   {items.map((action) => (
                     <article
-                      className="kanban-card"
+                      className={`kanban-card ${action.statut === "termine" ? "done" : "open"}`}
                       draggable
                       key={action.id}
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", action.id)}

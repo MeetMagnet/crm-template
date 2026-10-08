@@ -8,6 +8,7 @@ import {
   ACTION_CHANNELS,
   ACTION_CHANNEL_LABELS,
   ACTION_STATUT_LABELS,
+  actionStatutBadgeClass,
   PERSON_CATEGORIES,
   PERSON_CATEGORY_DEFAULT_STATES,
   PERSON_CATEGORY_LABELS,
@@ -195,13 +196,13 @@ export function ContactSheet({
       {error ? <p className="error">{error}</p> : null}
       {tab === "info" ? (
         <div className="prop-sheet">
-          <PropertyRow label="Prénom">
+          <PropertyRow emoji="👤" label="Prénom">
             <input className="input" value={draft.prenom} onChange={(e) => setDraft({ ...draft, prenom: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Nom">
+          <PropertyRow emoji="🪪" label="Nom">
             <input className="input" value={draft.nom} onChange={(e) => setDraft({ ...draft, nom: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="État">
+          <PropertyRow emoji="🚦" label="État">
             <select
               className="select"
               value={draft.state}
@@ -222,7 +223,7 @@ export function ContactSheet({
               ))}
             </select>
           </PropertyRow>
-          <PropertyRow label="Catégorie">
+          <PropertyRow emoji="🏷️" label="Catégorie">
             <select
               className="select"
               value={draft.category}
@@ -238,13 +239,13 @@ export function ContactSheet({
               ))}
             </select>
           </PropertyRow>
-          <PropertyRow label="Email">
+          <PropertyRow emoji="✉️" label="Email">
             <input className="input" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Téléphone">
+          <PropertyRow emoji="📞" label="Téléphone">
             <input className="input" value={draft.telephone} onChange={(e) => setDraft({ ...draft, telephone: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Prochaine action">
+          <PropertyRow emoji="✅" label="Prochaine action">
             <div className="next-action-box">
               <input
                 className="input"
@@ -261,7 +262,7 @@ export function ContactSheet({
               />
             </div>
           </PropertyRow>
-          <PropertyRow label="Entreprise">
+          <PropertyRow emoji="🏢" label="Entreprise">
             <div className="stack-tight">
               <select className="select" value={draft.companyId} onChange={(e) => commit({ companyId: e.target.value })}>
                 <option value="">Aucune</option>
@@ -278,7 +279,7 @@ export function ContactSheet({
               ) : null}
             </div>
           </PropertyRow>
-          <PropertyRow label="LinkedIn">
+          <PropertyRow emoji="🔗" label="LinkedIn">
             <div className="inline-field">
               <input
                 className="input"
@@ -294,10 +295,10 @@ export function ContactSheet({
               ) : null}
             </div>
           </PropertyRow>
-          <PropertyRow label="Poste">
+          <PropertyRow emoji="💼" label="Poste">
             <input className="input" value={draft.poste} onChange={(e) => setDraft({ ...draft, poste: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Description">
+          <PropertyRow emoji="📝" label="Description">
             <textarea
               className="textarea"
               rows={4}
@@ -307,13 +308,13 @@ export function ContactSheet({
               onBlur={() => commit({})}
             />
           </PropertyRow>
-          <PropertyRow label="Adresse">
+          <PropertyRow emoji="📍" label="Adresse">
             <input className="input" placeholder="Adresse postale" value={draft.adresse} onChange={(e) => setDraft({ ...draft, adresse: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Pays">
+          <PropertyRow emoji="🌍" label="Pays">
             <input className="input" placeholder="Pays" value={draft.pays} onChange={(e) => setDraft({ ...draft, pays: e.target.value })} onBlur={() => commit({})} />
           </PropertyRow>
-          <PropertyRow label="Provenance">
+          <PropertyRow emoji="🧭" label="Provenance">
             <div className="choice-chips">
               {PROVENANCE_OPTIONS.map((option) => {
                 const active = provenance.some((value) => value.toLowerCase() === option.toLowerCase());
@@ -336,7 +337,7 @@ export function ContactSheet({
             </div>
           </PropertyRow>
           {history.length > 0 ? (
-            <PropertyRow label="Parcours">
+            <PropertyRow emoji="🛤️" label="Parcours">
               <p className="journey">{journeyLabel(history)}</p>
             </PropertyRow>
           ) : null}
@@ -406,7 +407,7 @@ export function ContactSheet({
               <p className="muted">Aucune action.</p>
             ) : (
               (contact.actions ?? []).map((action) => (
-                <article className="action-item" key={action.id}>
+                <article className={`action-item ${action.statut === "termine" ? "done" : "open"}`} key={action.id}>
                   <header>
                     <div>
                       <strong>{action.titre}</strong>
@@ -414,7 +415,7 @@ export function ContactSheet({
                         {ACTION_CHANNEL_LABELS[action.channel]} · {formatDateTime(action.datePrevue)}
                       </p>
                     </div>
-                    <span className="badge badge-gray">{ACTION_STATUT_LABELS[action.statut]}</span>
+                    <span className={actionStatutBadgeClass(action.statut)}>{ACTION_STATUT_LABELS[action.statut]}</span>
                   </header>
                   {action.contenu ? <p style={{ marginTop: 0 }}>{action.contenu}</p> : null}
                   {action.statut !== "termine" ? (

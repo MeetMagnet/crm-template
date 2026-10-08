@@ -81,31 +81,31 @@ export function CompanySheet({
   return (
     <div className="prop-sheet">
       {error ? <p className="error">{error}</p> : null}
-      <PropertyRow label="Nom">
+      <PropertyRow emoji="🏢" label="Nom">
         <input className="input" value={draft.nom} onChange={(e) => setDraft({ ...draft, nom: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="Site web">
+      <PropertyRow emoji="🌐" label="Site web">
         <input className="input" value={draft.siteWeb} onChange={(e) => setDraft({ ...draft, siteWeb: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="E-mail">
+      <PropertyRow emoji="✉️" label="E-mail">
         <input className="input" type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="Téléphone">
+      <PropertyRow emoji="📞" label="Téléphone">
         <input className="input" value={draft.telephone} onChange={(e) => setDraft({ ...draft, telephone: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="LinkedIn">
+      <PropertyRow emoji="🔗" label="LinkedIn">
         <input className="input" value={draft.linkedinUrl} onChange={(e) => setDraft({ ...draft, linkedinUrl: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="SIRET">
+      <PropertyRow emoji="🧾" label="SIRET">
         <input className="input" value={draft.siret} onChange={(e) => setDraft({ ...draft, siret: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="Adresse">
+      <PropertyRow emoji="📍" label="Adresse">
         <input className="input" value={draft.adresse} onChange={(e) => setDraft({ ...draft, adresse: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="Description">
+      <PropertyRow emoji="📝" label="Description">
         <textarea className="textarea" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
-      <PropertyRow label="Notes">
+      <PropertyRow emoji="🗒️" label="Notes">
         <textarea className="textarea" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} onBlur={() => commit()} />
       </PropertyRow>
       <div

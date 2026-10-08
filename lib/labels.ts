@@ -208,10 +208,15 @@ export const ACTION_CHANNEL_LABELS: Record<ActionChannel, string> = {
 };
 
 export const ACTION_STATUT_LABELS: Record<ActionStatut, string> = {
-  a_faire: "to do",
+  a_faire: "À faire",
   en_cours: "En cours",
   termine: "Terminé",
 };
+
+/** À faire = orange, terminé = vert, comme les pastilles d’actions MeetMagnet. */
+export function actionStatutBadgeClass(statut: ActionStatut) {
+  return statut === "termine" ? "badge badge-green" : "badge badge-orange";
+}
 
 /** Provenance commerciale (MeetMagnet), sans newsletter ni intégrations. */
 export const PROVENANCE_OPTIONS = [

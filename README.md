@@ -198,10 +198,9 @@ Selon l’interface Claude (Connectors / MCP / Custom tools) :
 
 ### 7.3 Ce que Claude peut faire (outils inclus)
 
-- Lister les contacts
-- Créer un contact
-- Changer l’état d’un contact
-- Lister les actions
+- Lire, créer, modifier et supprimer les contacts
+- Lire, créer, modifier et supprimer les entreprises
+- Lire, créer, modifier, terminer et supprimer les actions
 - Ajouter une note
 
 Exemple de demande à Claude une fois branché :

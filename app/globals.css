@@ -395,6 +395,14 @@ tr.row-link:hover {
   cursor: grab;
 }
 
+.kanban-card.open {
+  border-left: 3px solid #fb923c;
+}
+
+.kanban-card.done {
+  border-left: 3px solid #34d399;
+}
+
 .kanban-card h3 {
   margin: 0 0 4px;
   font-size: 14px;
@@ -500,9 +508,19 @@ tr.row-link:hover {
 }
 
 .prop-label {
-  font-size: 13px;
-  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
   padding-top: 6px;
+}
+
+.prop-emoji {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .choice-chips {
@@ -907,9 +925,18 @@ td.num {
 
 .action-item {
   border: 1px solid var(--line);
+  border-left-width: 3px;
   border-radius: 10px;
   padding: 12px;
   background: #fff;
+}
+
+.action-item.open {
+  border-left-color: #fb923c;
+}
+
+.action-item.done {
+  border-left-color: #34d399;
 }
 
 .action-item header {

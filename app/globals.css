@@ -947,6 +947,59 @@ td.num {
   margin-bottom: 8px;
 }
 
+.action-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid #fb923c;
+  background: #fff;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.action-check:hover {
+  background: #fff7ed;
+  border-color: #f97316;
+}
+
+.action-check.done {
+  border-color: #10b981;
+  background: #10b981;
+}
+
+.action-check.done:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.action-check svg {
+  width: 12px;
+  height: 12px;
+}
+
+.title-with-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title-with-check h3 {
+  margin: 0;
+}
+
+.badge-btn {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
 .actions-list {
   display: grid;
   gap: 10px;

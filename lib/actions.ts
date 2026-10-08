@@ -38,9 +38,12 @@ function buildWhere(filters: ActionFilters = {}): Prisma.ActionWhereInput {
 }
 
 function buildOrderBy(sorts: ActionSort[] = []): Prisma.ActionOrderByWithRelationInput[] {
-  if (!sorts.length) return [{ datePrevue: "asc" }, { createdAt: "desc" }];
+  if (!sorts.length) return [{ datePrevue: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }];
   return sorts.map((s) => {
     if (s.field === "contact") return { contact: { nom: s.direction } };
+    if (s.field === "datePrevue") {
+      return { datePrevue: { sort: s.direction, nulls: s.direction === "asc" ? "last" : "first" } };
+    }
     return { [s.field]: s.direction } as Prisma.ActionOrderByWithRelationInput;
   });
 }

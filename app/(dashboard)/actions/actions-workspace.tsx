@@ -31,6 +31,7 @@ import {
   parseCustomFields,
   type CustomColumnRecord,
 } from "@/lib/custom-columns";
+import { ActionCheck } from "@/app/components/action-check";
 import { CustomColumnModal } from "@/app/components/custom-column-modal";
 import { PropertyRow } from "@/app/components/property-sheet";
 import { SidePeek } from "@/app/components/side-peek";
@@ -325,12 +326,17 @@ export function ActionsWorkspace() {
   }
 
   async function setActionStatut(id: string, statut: ActionStatut) {
-    await fetch(`/api/actions/${id}`, {
+    setActions((prev) => prev.map((action) => (action.id === id ? { ...action, statut } : action)));
+    setPeek((current) => (current?.id === id ? { ...current, statut } : current));
+    setActionDraft((draft) => (peek?.id === id ? { ...draft, statut } : draft));
+    const res = await fetch(`/api/actions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ statut }),
     });
-    await fetchActions();
+    if (!res.ok || !workflowBucket || workflowBucket === statut) {
+      await fetchActions();
+    }
   }
 
   async function bulkDelete() {
@@ -733,6 +739,7 @@ export function ActionsWorkspace() {
                         }
                       />
                     </th>
+                    <th className="col-check" aria-label="Terminé" />
                     {visibleCols.map((col) => (
                       <th
                         key={col.key}
@@ -779,6 +786,12 @@ export function ActionsWorkspace() {
                           }
                         />
                       </td>
+                      <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                        <ActionCheck
+                          done={action.statut === "termine"}
+                          onToggle={() => void setActionStatut(action.id, action.statut === "termine" ? "a_faire" : "termine")}
+                        />
+                      </td>
                       {visibleCols.map((col) => (
                         <td key={col.key}>{cellValue(action, col.key)}</td>
                       ))}
@@ -820,7 +833,13 @@ export function ActionsWorkspace() {
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", action.id)}
                       onClick={() => openAction(action)}
                     >
-                      <h3>{action.titre}</h3>
+                      <div className="title-with-check">
+                        <ActionCheck
+                          done={action.statut === "termine"}
+                          onToggle={() => void setActionStatut(action.id, action.statut === "termine" ? "a_faire" : "termine")}
+                        />
+                        <h3>{action.titre}</h3>
+                      </div>
                       <p className="muted" style={{ margin: 0 }}>
                         {contactDisplayName(action.contact)} · {ACTION_CHANNEL_LABELS[action.channel]}
                       </p>
@@ -868,6 +887,15 @@ export function ActionsWorkspace() {
       >
         <div className="prop-sheet">
           {actionError ? <p className="error">{actionError}</p> : null}
+          {!creatingAction && peek ? (
+            <div className="title-with-check">
+              <ActionCheck
+                done={actionDraft.statut === "termine"}
+                onToggle={() => void setActionStatut(peek.id, actionDraft.statut === "termine" ? "a_faire" : "termine")}
+              />
+              <span className={actionStatutBadgeClass(actionDraft.statut)}>{ACTION_STATUT_LABELS[actionDraft.statut]}</span>
+            </div>
+          ) : null}
           {creatingAction ? (
             <PropertyRow label="Contact">
               <select

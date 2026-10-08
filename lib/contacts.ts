@@ -90,18 +90,23 @@ export async function listContacts(
       take: pageSize,
     }),
   ]);
+  await alignContactsNextAction(data);
   return { data, total, page, pageSize };
 }
 
 export async function getContact(id: string) {
-  return prisma.contact.findUnique({
+  const contact = await prisma.contact.findUnique({
     where: { id },
-    include: {
-      company: true,
-      actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
-      stateHistory: { orderBy: { createdAt: "desc" } },
-    },
+    include: contactDetailInclude,
   });
+  if (!contact) return null;
+  const next = nextActionFields(pickNextOpenAction(contact.actions));
+  if (!sameNextAction(contact, next)) {
+    await prisma.contact.update({ where: { id }, data: next });
+    contact.prochaineActionTitre = next.prochaineActionTitre;
+    contact.prochaineActionDate = next.prochaineActionDate;
+  }
+  return contact;
 }
 
 export type ContactInput = {
@@ -129,6 +134,57 @@ function cleanOptional(value: string | null | undefined) {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
 }
+
+type NextActionCandidate = {
+  id?: string;
+  statut: string;
+  titre: string;
+  datePrevue: Date | null;
+  createdAt: Date;
+};
+
+/** Prochaine action ouverte : la plus proche datée, puis les actions sans date. */
+export function pickNextOpenAction<T extends NextActionCandidate>(actions: T[]): T | null {
+  const open = actions.filter((action) => action.statut !== "termine");
+  open.sort((a, b) => {
+    if (a.datePrevue && b.datePrevue) {
+      const diff = a.datePrevue.getTime() - b.datePrevue.getTime();
+      if (diff !== 0) return diff;
+    } else if (a.datePrevue || b.datePrevue) {
+      return a.datePrevue ? -1 : 1;
+    }
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+  return open[0] ?? null;
+}
+
+function nextActionFields(action: { titre: string; datePrevue: Date | null } | null) {
+  return {
+    prochaineActionTitre: action?.titre ?? null,
+    prochaineActionDate: action?.datePrevue ?? null,
+  };
+}
+
+function sameNextAction(
+  contact: { prochaineActionTitre: string | null; prochaineActionDate: Date | null },
+  next: { prochaineActionTitre: string | null; prochaineActionDate: Date | null },
+) {
+  const left = contact.prochaineActionDate?.getTime() ?? null;
+  const right = next.prochaineActionDate?.getTime() ?? null;
+  return contact.prochaineActionTitre === next.prochaineActionTitre && left === right;
+}
+
+function sameCalendarDay(left: Date | null | undefined, right: Date | null | undefined) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10);
+}
+
+const contactDetailInclude = {
+  company: true,
+  actions: { orderBy: [{ datePrevue: { sort: "asc" as const, nulls: "last" as const } }, { createdAt: "asc" as const }] },
+  stateHistory: { orderBy: { createdAt: "desc" as const } },
+} satisfies Prisma.ContactInclude;
 
 export async function createContact(input: ContactInput, changedById?: string) {
   const lifecycle = resolveLifecycleUpdate({
@@ -160,7 +216,7 @@ export async function createContact(input: ContactInput, changedById?: string) {
       },
       include: {
         company: true,
-        actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+        actions: { orderBy: [{ datePrevue: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }] },
         stateHistory: { orderBy: { createdAt: "desc" } },
       },
     });
@@ -176,13 +232,29 @@ export async function createContact(input: ContactInput, changedById?: string) {
       },
     });
 
+    const titre = cleanOptional(input.prochaineActionTitre);
+    if (titre) {
+      await tx.action.create({
+        data: {
+          contactId: contact.id,
+          channel: "note",
+          titre,
+          contenu: "",
+          statut: "a_faire",
+          datePrevue: input.prochaineActionDate ?? null,
+        },
+      });
+    }
+
     return tx.contact.findUniqueOrThrow({
       where: { id: contact.id },
-      include: {
-        company: true,
-        actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
-        stateHistory: { orderBy: { createdAt: "desc" } },
-      },
+      include: contactDetailInclude,
+    });
+  }).then(async (contact) => {
+    await refreshContactNextAction(contact.id);
+    return prisma.contact.findUniqueOrThrow({
+      where: { id: contact.id },
+      include: contactDetailInclude,
     });
   });
 }
@@ -215,12 +287,6 @@ export async function updateContact(id: string, input: ContactInput, changedById
         ...(input.pays !== undefined ? { pays: cleanOptional(input.pays) } : {}),
         ...(input.source !== undefined ? { source: cleanOptional(input.source) } : {}),
         ...(input.companyId !== undefined ? { companyId: input.companyId || null } : {}),
-        ...(input.prochaineActionTitre !== undefined
-          ? { prochaineActionTitre: cleanOptional(input.prochaineActionTitre) }
-          : {}),
-        ...(input.prochaineActionDate !== undefined
-          ? { prochaineActionDate: input.prochaineActionDate }
-          : {}),
         ...(input.customFields !== undefined
           ? {
               customFields: stringifyCustomFields({
@@ -234,7 +300,7 @@ export async function updateContact(id: string, input: ContactInput, changedById
       },
       include: {
         company: true,
-        actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+        actions: { orderBy: [{ datePrevue: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }] },
         stateHistory: { orderBy: { createdAt: "desc" } },
       },
     });
@@ -252,7 +318,14 @@ export async function updateContact(id: string, input: ContactInput, changedById
       });
     }
 
-    return contact;
+    return contact.id;
+  }).then(async (contactId) => {
+    await syncEditedNextAction(contactId, current, input);
+    await refreshContactNextAction(contactId);
+    return prisma.contact.findUniqueOrThrow({
+      where: { id: contactId },
+      include: contactDetailInclude,
+    });
   });
 }
 
@@ -354,16 +427,79 @@ function formatProvenanceImport(values: string[]) {
   return out.join(", ");
 }
 
-export async function refreshContactNextAction(contactId: string) {
-  const next = await prisma.action.findFirst({
+async function alignContactsNextAction(
+  contacts: Array<{ id: string; prochaineActionTitre: string | null; prochaineActionDate: Date | null }>,
+) {
+  if (!contacts.length) return;
+  const actions = await prisma.action.findMany({
+    where: { contactId: { in: contacts.map((contact) => contact.id) }, statut: { not: "termine" } },
+    select: { contactId: true, titre: true, datePrevue: true, createdAt: true, statut: true },
+  });
+  const grouped = new Map<string, typeof actions>();
+  for (const action of actions) {
+    const list = grouped.get(action.contactId) ?? [];
+    list.push(action);
+    grouped.set(action.contactId, list);
+  }
+  for (const contact of contacts) {
+    const next = nextActionFields(pickNextOpenAction(grouped.get(contact.id) ?? []));
+    if (sameNextAction(contact, next)) continue;
+    contact.prochaineActionTitre = next.prochaineActionTitre;
+    contact.prochaineActionDate = next.prochaineActionDate;
+    await prisma.contact.update({ where: { id: contact.id }, data: next });
+  }
+}
+
+async function syncEditedNextAction(
+  contactId: string,
+  current: { prochaineActionTitre: string | null; prochaineActionDate: Date | null },
+  input: ContactInput,
+) {
+  const titleProvided = input.prochaineActionTitre !== undefined;
+  const dateProvided = input.prochaineActionDate !== undefined;
+  if (!titleProvided && !dateProvided) return;
+
+  const nextTitle = titleProvided ? (cleanOptional(input.prochaineActionTitre) ?? null) : current.prochaineActionTitre;
+  const titleChanged = titleProvided && nextTitle !== current.prochaineActionTitre;
+  const dateChanged = dateProvided && !sameCalendarDay(input.prochaineActionDate ?? null, current.prochaineActionDate);
+  if (!titleChanged && !dateChanged) return;
+
+  const open = await prisma.action.findMany({
     where: { contactId, statut: { not: "termine" } },
-    orderBy: [{ datePrevue: "asc" }, { createdAt: "asc" }],
+  });
+  const displayed =
+    open.find((action) => action.titre === current.prochaineActionTitre) ?? pickNextOpenAction(open);
+
+  if (displayed) {
+    await prisma.action.update({
+      where: { id: displayed.id },
+      data: {
+        ...(titleChanged && nextTitle ? { titre: nextTitle } : {}),
+        ...(dateChanged ? { datePrevue: input.prochaineActionDate ?? null } : {}),
+      },
+    });
+    return;
+  }
+
+  if (!nextTitle) return;
+  await prisma.action.create({
+    data: {
+      contactId,
+      channel: "note",
+      titre: nextTitle,
+      contenu: "",
+      statut: "a_faire",
+      datePrevue: dateProvided ? (input.prochaineActionDate ?? null) : null,
+    },
+  });
+}
+
+export async function refreshContactNextAction(contactId: string) {
+  const actions = await prisma.action.findMany({
+    where: { contactId, statut: { not: "termine" } },
   });
   return prisma.contact.update({
     where: { id: contactId },
-    data: {
-      prochaineActionTitre: next?.titre ?? null,
-      prochaineActionDate: next?.datePrevue ?? null,
-    },
+    data: nextActionFields(pickNextOpenAction(actions)),
   });
 }

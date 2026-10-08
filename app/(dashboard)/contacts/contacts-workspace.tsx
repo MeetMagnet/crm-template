@@ -449,12 +449,21 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
   }
 
   async function setActionStatut(actionId: string, statut: ActionStatut) {
-    await fetch(`/api/actions/${actionId}`, {
+    const contactId = selected?.id;
+    setSelected((prev) => {
+      if (!prev?.actions) return prev;
+      return {
+        ...prev,
+        actions: prev.actions.map((action) => (action.id === actionId ? { ...action, statut } : action)),
+      };
+    });
+    const res = await fetch(`/api/actions/${actionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ statut }),
     });
-    if (selected?.id) await openContact(selected.id);
+    if (res.ok && contactId) await openContact(contactId);
+    await fetchContacts();
   }
 
   async function bulkDelete() {

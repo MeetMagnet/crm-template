@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ActionChannel, ActionStatut, PersonCategory, PersonState } from "@prisma/client";
+import { ActionCheck } from "@/app/components/action-check";
 import { CustomFieldInputs } from "@/app/components/custom-column-modal";
 import { PropertyRow } from "@/app/components/property-sheet";
 import {
@@ -409,24 +410,27 @@ export function ContactSheet({
               (contact.actions ?? []).map((action) => (
                 <article className={`action-item ${action.statut === "termine" ? "done" : "open"}`} key={action.id}>
                   <header>
-                    <div>
-                      <strong>{action.titre}</strong>
-                      <p className="muted" style={{ margin: "4px 0 0" }}>
-                        {ACTION_CHANNEL_LABELS[action.channel]} · {formatDateTime(action.datePrevue)}
-                      </p>
+                    <div className="title-with-check">
+                      <ActionCheck
+                        done={action.statut === "termine"}
+                        onToggle={() => onSetStatut(action.id, action.statut === "termine" ? "a_faire" : "termine")}
+                      />
+                      <div>
+                        <strong>{action.titre}</strong>
+                        <p className="muted" style={{ margin: "4px 0 0" }}>
+                          {ACTION_CHANNEL_LABELS[action.channel]} · {formatDateTime(action.datePrevue)}
+                        </p>
+                      </div>
                     </div>
-                    <span className={actionStatutBadgeClass(action.statut)}>{ACTION_STATUT_LABELS[action.statut]}</span>
+                    <button
+                      className={`badge-btn ${actionStatutBadgeClass(action.statut)}`}
+                      type="button"
+                      onClick={() => onSetStatut(action.id, action.statut === "termine" ? "a_faire" : "termine")}
+                    >
+                      {ACTION_STATUT_LABELS[action.statut]}
+                    </button>
                   </header>
                   {action.contenu ? <p style={{ marginTop: 0 }}>{action.contenu}</p> : null}
-                  {action.statut !== "termine" ? (
-                    <button className="btn secondary small" type="button" onClick={() => onSetStatut(action.id, "termine")}>
-                      Terminer
-                    </button>
-                  ) : (
-                    <button className="btn secondary small" type="button" onClick={() => onSetStatut(action.id, "a_faire")}>
-                      Réouvrir
-                    </button>
-                  )}
                 </article>
               ))
             )}

@@ -104,18 +104,19 @@ export function CustomFieldInputs({
   columns,
   values,
   onChange,
+  layout = "stack",
 }: {
   columns: Array<{ key: string; label: string; type: string }>;
   values: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
+  layout?: "stack" | "rows";
 }) {
   if (!columns.length) return null;
   return (
     <>
-      {columns.map((col) => (
-        <label key={col.key}>
-          {col.label}
-          {col.type === "boolean" ? (
+      {columns.map((col) => {
+        const control =
+          col.type === "boolean" ? (
             <select
               className="select"
               value={values[col.key] === true ? "true" : values[col.key] === false ? "false" : ""}
@@ -131,23 +132,30 @@ export function CustomFieldInputs({
             <input
               className="input"
               type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
-              value={
-                values[col.key] === null || values[col.key] === undefined ? "" : String(values[col.key])
-              }
+              value={values[col.key] === null || values[col.key] === undefined ? "" : String(values[col.key])}
               onChange={(e) =>
                 onChange(
                   col.key,
-                  e.target.value === ""
-                    ? null
-                    : col.type === "number"
-                      ? Number(e.target.value)
-                      : e.target.value,
+                  e.target.value === "" ? null : col.type === "number" ? Number(e.target.value) : e.target.value,
                 )
               }
             />
-          )}
-        </label>
-      ))}
+          );
+        if (layout === "rows") {
+          return (
+            <div className="prop-row" key={col.key}>
+              <div className="prop-label">{col.label}</div>
+              <div className="prop-value">{control}</div>
+            </div>
+          );
+        }
+        return (
+          <label key={col.key}>
+            {col.label}
+            {control}
+          </label>
+        );
+      })}
     </>
   );
 }

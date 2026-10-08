@@ -178,6 +178,11 @@ model SavedView {
   @@index([userId])
 }
 
+model Setting {
+  key   String @id
+  value String
+}
+
 model CustomColumn {
   id         String   @id @default(cuid())
   entityType String

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CompanySheet } from "@/app/components/company-sheet";
 import { SidePeek } from "@/app/components/side-peek";
-import { contactDisplayName } from "@/lib/labels";
 import {
   PAGE_SIZE_OPTIONS,
   loadLayout,
@@ -22,7 +22,7 @@ import {
   parseCustomFields,
   type CustomColumnRecord,
 } from "@/lib/custom-columns";
-import { CustomColumnModal, CustomFieldInputs } from "@/app/components/custom-column-modal";
+import { CustomColumnModal } from "@/app/components/custom-column-modal";
 
 type CompanyRow = {
   id: string;
@@ -94,7 +94,6 @@ export function CompaniesWorkspace() {
   const [customFieldDraft, setCustomFieldDraft] = useState<Record<string, unknown>>({});
   const [selected, setSelected] = useState<CompanyRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<"info" | "notes" | "contacts">("info");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -192,7 +191,6 @@ export function CompaniesWorkspace() {
     setSelected(data);
     setCustomFieldDraft(getCustomFields(data));
     setCreating(false);
-    setTab("info");
     const params = new URLSearchParams(searchParams.toString());
     params.set("company", id);
     router.replace(`/companies?${params.toString()}`);
@@ -224,20 +222,37 @@ export function CompaniesWorkspace() {
       contacts: [],
     });
     setCustomFieldDraft({});
-    setTab("info");
   }
 
-  async function saveCompany(form: FormData) {
+  async function saveCompany(
+    draft: {
+      nom: string;
+      email: string;
+      telephone: string;
+      adresse: string;
+      siteWeb: string;
+      siret: string;
+      linkedinUrl: string;
+      description: string;
+      notes: string;
+    },
+    fields: Record<string, unknown>,
+  ) {
     if (!selected) return;
     setSaving(true);
     setError("");
-    const payload = Object.fromEntries(
-      ["nom", "email", "telephone", "adresse", "siteWeb", "siret", "linkedinUrl", "description", "notes"].map(
-        (k) => [k, String(form.get(k) ?? "") || null],
-      ),
-    );
-    payload.nom = String(form.get("nom") ?? "");
-    (payload as Record<string, unknown>).customFields = customFieldDraft;
+    const payload = {
+      nom: draft.nom,
+      email: draft.email || null,
+      telephone: draft.telephone || null,
+      adresse: draft.adresse || null,
+      siteWeb: draft.siteWeb || null,
+      siret: draft.siret || null,
+      linkedinUrl: draft.linkedinUrl || null,
+      description: draft.description || null,
+      notes: draft.notes || null,
+      customFields: fields,
+    };
     const url = creating || !selected.id ? "/api/companies" : `/api/companies/${selected.id}`;
     const res = await fetch(url, {
       method: creating || !selected.id ? "POST" : "PATCH",
@@ -711,110 +726,16 @@ export function CompaniesWorkspace() {
         }
       >
         {selected ? (
-          <>
-            <div className="tabs">
-              <button type="button" className={tab === "info" ? "active" : ""} onClick={() => setTab("info")}>
-                Informations
-              </button>
-              <button type="button" className={tab === "notes" ? "active" : ""} onClick={() => setTab("notes")}>
-                Notes
-              </button>
-              <button
-                type="button"
-                className={tab === "contacts" ? "active" : ""}
-                onClick={() => setTab("contacts")}
-                disabled={creating || !selected.id}
-              >
-                Contacts
-              </button>
-            </div>
-            {error ? <p className="error">{error}</p> : null}
-            {tab === "contacts" ? (
-              <div className="actions-list">
-                {(selected.contacts ?? []).length === 0 ? (
-                  <p className="muted">Aucun contact rattaché.</p>
-                ) : (
-                  (selected.contacts ?? []).map((c) => (
-                    <a key={c.id} className="action-item" href={`/contacts?contact=${c.id}`}>
-                      <strong>{contactDisplayName(c)}</strong>
-                      <div className="muted">{c.email ?? "—"}</div>
-                    </a>
-                  ))
-                )}
-              </div>
-            ) : (
-              <form
-                className="form-grid"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void saveCompany(new FormData(e.currentTarget));
-                }}
-              >
-                {tab === "info" ? (
-                  <>
-                    <label>
-                      Nom
-                      <input className="input" name="nom" required defaultValue={selected.nom} />
-                    </label>
-                    <div className="form-row">
-                      <label>
-                        E-mail
-                        <input className="input" name="email" type="email" defaultValue={selected.email ?? ""} />
-                      </label>
-                      <label>
-                        Téléphone
-                        <input className="input" name="telephone" defaultValue={selected.telephone ?? ""} />
-                      </label>
-                    </div>
-                    <label>
-                      Site web
-                      <input className="input" name="siteWeb" defaultValue={selected.siteWeb ?? ""} />
-                    </label>
-                    <label>
-                      SIRET
-                      <input className="input" name="siret" defaultValue={selected.siret ?? ""} />
-                    </label>
-                    <label>
-                      LinkedIn
-                      <input className="input" name="linkedinUrl" defaultValue={selected.linkedinUrl ?? ""} />
-                    </label>
-                    <label>
-                      Adresse
-                      <input className="input" name="adresse" defaultValue={selected.adresse ?? ""} />
-                    </label>
-                    <label>
-                      Description
-                      <textarea className="textarea" name="description" defaultValue={selected.description ?? ""} />
-                    </label>
-                    <CustomFieldInputs
-                      columns={customColumns}
-                      values={customFieldDraft}
-                      onChange={(key, value) => setCustomFieldDraft((prev) => ({ ...prev, [key]: value }))}
-                    />
-                    <input type="hidden" name="notes" defaultValue={selected.notes ?? ""} />
-                  </>
-                ) : (
-                  <>
-                    <input type="hidden" name="nom" defaultValue={selected.nom} />
-                    <input type="hidden" name="email" defaultValue={selected.email ?? ""} />
-                    <input type="hidden" name="telephone" defaultValue={selected.telephone ?? ""} />
-                    <input type="hidden" name="siteWeb" defaultValue={selected.siteWeb ?? ""} />
-                    <input type="hidden" name="siret" defaultValue={selected.siret ?? ""} />
-                    <input type="hidden" name="linkedinUrl" defaultValue={selected.linkedinUrl ?? ""} />
-                    <input type="hidden" name="adresse" defaultValue={selected.adresse ?? ""} />
-                    <input type="hidden" name="description" defaultValue={selected.description ?? ""} />
-                    <label>
-                      Notes
-                      <textarea className="textarea" name="notes" defaultValue={selected.notes ?? ""} />
-                    </label>
-                  </>
-                )}
-                <button className="btn" disabled={saving} type="submit">
-                  {saving ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </form>
-            )}
-          </>
+          <CompanySheet
+            company={selected}
+            creating={creating || !selected.id}
+            customColumns={customColumns}
+            customFields={customFieldDraft}
+            onCustomFields={setCustomFieldDraft}
+            saving={saving}
+            error={error}
+            onSave={(draft, fields) => void saveCompany(draft, fields)}
+          />
         ) : null}
       </SidePeek>
 

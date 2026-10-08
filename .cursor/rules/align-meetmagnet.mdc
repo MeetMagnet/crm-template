@@ -23,3 +23,5 @@ alwaysApply: true
 - Nav : Contacts, Entreprises, Actions, Statistiques
 - Side peeks pour fiches contact / entreprise (pas de pages détail pleine page)
 - Kanban intégré à Contacts (pas de page Pipeline séparée)
+- Fiches contact / entreprise : lignes de propriétés, sans intégrations, matching, type d’offre, facturation Stripe ou Pennylane
+- Statistiques : uniquement la vue Commercial « Activité vs cohortes »

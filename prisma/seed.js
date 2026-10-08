@@ -57,6 +57,12 @@ async function main() {
     },
   });
 
+  function daysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
   const marie = await prisma.contact.create({
     data: {
       prenom: "Marie",
@@ -68,6 +74,7 @@ async function main() {
       state: "kickoff",
       companyId: dupont.id,
       source: "Site web",
+      createdAt: daysAgo(70),
     },
   });
 
@@ -82,6 +89,7 @@ async function main() {
       state: "rdv_decouverte",
       companyId: atelier.id,
       source: "LinkedIn",
+      createdAt: daysAgo(21),
     },
   });
 
@@ -94,10 +102,11 @@ async function main() {
       category: "lead",
       state: "lead_en_cours",
       companyId: technord.id,
+      createdAt: daysAgo(3),
     },
   });
 
-  await prisma.contact.create({
+  const hugo = await prisma.contact.create({
     data: {
       prenom: "Hugo",
       nom: "Petit",
@@ -105,10 +114,11 @@ async function main() {
       telephone: "06 12 34 56 04",
       category: "lead",
       state: "new_lead",
+      createdAt: daysAgo(1),
     },
   });
 
-  await prisma.contact.create({
+  const camille = await prisma.contact.create({
     data: {
       prenom: "Camille",
       nom: "Roux",
@@ -117,14 +127,23 @@ async function main() {
       category: "ex_clients",
       state: "perdu",
       companyId: technord.id,
+      createdAt: daysAgo(120),
     },
   });
 
   await prisma.contactStateHistory.createMany({
     data: [
-      { contactId: marie.id, newState: "kickoff", newCategory: "client" },
-      { contactId: lucas.id, newState: "rdv_decouverte", newCategory: "prospect" },
-      { contactId: sofia.id, newState: "lead_en_cours", newCategory: "lead" },
+      { contactId: marie.id, newState: "new_lead", newCategory: "lead", createdAt: daysAgo(70) },
+      { contactId: marie.id, previousState: "new_lead", newState: "rdv_decouverte", previousCategory: "lead", newCategory: "prospect", createdAt: daysAgo(56) },
+      { contactId: marie.id, previousState: "rdv_decouverte", newState: "rdv2_planifie", previousCategory: "prospect", newCategory: "prospect", createdAt: daysAgo(42) },
+      { contactId: marie.id, previousState: "rdv2_planifie", newState: "propale", previousCategory: "prospect", newCategory: "prospect", createdAt: daysAgo(28) },
+      { contactId: marie.id, previousState: "propale", newState: "kickoff", previousCategory: "prospect", newCategory: "client", createdAt: daysAgo(14) },
+      { contactId: lucas.id, newState: "new_lead", newCategory: "lead", createdAt: daysAgo(21) },
+      { contactId: lucas.id, previousState: "new_lead", newState: "rdv_decouverte", previousCategory: "lead", newCategory: "prospect", createdAt: daysAgo(2) },
+      { contactId: sofia.id, newState: "lead_en_cours", newCategory: "lead", createdAt: daysAgo(3) },
+      { contactId: hugo.id, newState: "new_lead", newCategory: "lead", createdAt: daysAgo(1) },
+      { contactId: camille.id, newState: "new_lead", newCategory: "lead", createdAt: daysAgo(120) },
+      { contactId: camille.id, previousState: "new_lead", newState: "perdu", previousCategory: "lead", newCategory: "ex_clients", createdAt: daysAgo(90) },
     ],
   });
 
@@ -145,6 +164,7 @@ async function main() {
         contenu: "Présentation du module pipeline, 45 min.",
         statut: "a_faire",
         datePrevue: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        dateRealisation: daysAgo(2),
       },
       {
         contactId: sofia.id,

@@ -484,6 +484,254 @@ tr.row-link:hover {
   gap: 12px;
 }
 
+.prop-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.prop-row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  border-bottom: 1px solid #f1f1ef;
+}
+
+.prop-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.prop-value .input,
+.prop-value .select,
+.prop-value .textarea {
+  border-color: transparent;
+  background: transparent;
+  padding: 6px 8px;
+}
+
+.prop-value .input:hover,
+.prop-value .select:hover,
+.prop-value .textarea:hover {
+  background: var(--hover);
+}
+
+.prop-value .input:focus,
+.prop-value .select:focus,
+.prop-value .textarea:focus {
+  background: #fff;
+  border-color: var(--line);
+}
+
+.prop-value .textarea {
+  min-height: 72px;
+}
+
+.prop-details {
+  margin-top: 8px;
+}
+
+.prop-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.prop-note,
+.sheet-status {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prop-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.prop-history {
+  margin-top: 16px;
+}
+
+.prop-history ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.prop-history li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f1ef;
+  font-size: 13px;
+}
+
+.prop-history li span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stats-page {
+  padding: 20px 24px 40px;
+  max-width: 1100px;
+}
+
+.stats-head,
+.stats-toolbar,
+.week-progress,
+.stats-kpis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stats-head h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.crumb {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.crumb span {
+  margin: 0 4px;
+}
+
+.seg,
+.stats-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.seg button,
+.chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.seg button.active,
+.chip.active {
+  background: var(--hover);
+  border-color: var(--text);
+}
+
+.stats-kpis {
+  justify-content: flex-start;
+  margin: 16px 0;
+}
+
+.stats-kpis div {
+  min-width: 140px;
+}
+
+.stats-kpis span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stats-kpis strong {
+  font-size: 18px;
+}
+
+.stats-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stats-block h2 {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stats-pad {
+  padding: 8px 0;
+}
+
+.week-progress {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.week-progress p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.week-progress strong {
+  font-size: 16px;
+}
+
+.week-progress label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.week-progress .input {
+  width: 88px;
+}
+
+.progress-track {
+  height: 8px;
+  background: #f1f1ef;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.progress-track div {
+  height: 100%;
+  background: var(--text);
+}
+
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: 72px minmax(80px, 1fr) 160px;
+  gap: 10px;
+  align-items: center;
+}
+
+.funnel-bar {
+  background: #2e7bb8;
+  color: #fff;
+  border-radius: 8px;
+  min-width: 64px;
+  text-align: center;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+th.num,
+td.num {
+  text-align: right;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -563,7 +811,9 @@ tr.row-link:hover {
     display: inline-flex;
   }
 
-  .form-row {
+  .form-row,
+  .prop-row,
+  .funnel-row {
     grid-template-columns: 1fr;
   }
 }

@@ -15,7 +15,7 @@ Un CRM privé avec :
 - Contacts (liste + kanban)
 - Entreprises
 - Actions à faire
-- Statistiques
+- Statistiques commerciales (activité et cohortes)
 - Connexion sécurisée (login / mot de passe)
 - Possibilité de brancher Claude ou Cursor pour lire / modifier les données
 
@@ -125,7 +125,7 @@ Menu de gauche :
 - **Contacts** : vos interlocuteurs (liste ou kanban)
 - **Entreprises** : les sociétés
 - **Actions** : tâches / appels / emails / RDV
-- **Statistiques** : vue d’ensemble
+- **Statistiques** : activité commerciale et cohortes (RDV1, propales, signatures)
 
 Gestes utiles :
 

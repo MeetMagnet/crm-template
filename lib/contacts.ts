@@ -99,6 +99,7 @@ export async function getContact(id: string) {
     include: {
       company: true,
       actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+      stateHistory: { orderBy: { createdAt: "desc" } },
     },
   });
 }
@@ -157,7 +158,11 @@ export async function createContact(input: ContactInput, changedById?: string) {
         prochaineActionDate: input.prochaineActionDate ?? null,
         customFields: stringifyCustomFields(input.customFields ?? {}),
       },
-      include: { company: true },
+      include: {
+        company: true,
+        actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+        stateHistory: { orderBy: { createdAt: "desc" } },
+      },
     });
 
     await tx.contactStateHistory.create({
@@ -171,7 +176,14 @@ export async function createContact(input: ContactInput, changedById?: string) {
       },
     });
 
-    return contact;
+    return tx.contact.findUniqueOrThrow({
+      where: { id: contact.id },
+      include: {
+        company: true,
+        actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+        stateHistory: { orderBy: { createdAt: "desc" } },
+      },
+    });
   });
 }
 
@@ -223,6 +235,7 @@ export async function updateContact(id: string, input: ContactInput, changedById
       include: {
         company: true,
         actions: { orderBy: [{ datePrevue: "asc" }, { createdAt: "desc" }] },
+        stateHistory: { orderBy: { createdAt: "desc" } },
       },
     });
 

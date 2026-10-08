@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { ActionChannel, ActionStatut, PersonCategory, PersonState } from "@prisma/client";
+import type { ActionStatut, PersonCategory, PersonState } from "@prisma/client";
+import { ContactSheet, type ContactSheetData } from "@/app/components/contact-sheet";
 import { SidePeek } from "@/app/components/side-peek";
 import {
-  ACTION_CHANNELS,
-  ACTION_CHANNEL_LABELS,
-  ACTION_STATUT_LABELS,
   PERSON_CATEGORIES,
   PERSON_CATEGORY_COLORS,
   PERSON_CATEGORY_LABELS,
@@ -16,7 +14,6 @@ import {
   PERSON_STATE_LABELS,
   contactDisplayName,
   formatDate,
-  formatDateTime,
 } from "@/lib/labels";
 import {
   PAGE_SIZE_OPTIONS,
@@ -36,41 +33,13 @@ import {
   parseCustomFields,
   type CustomColumnRecord,
 } from "@/lib/custom-columns";
-import { CustomColumnModal, CustomFieldInputs } from "@/app/components/custom-column-modal";
+import { CustomColumnModal } from "@/app/components/custom-column-modal";
 
 type CompanyOption = { id: string; nom: string };
 
-type ActionRow = {
-  id: string;
-  channel: ActionChannel;
-  titre: string;
-  contenu: string;
-  statut: ActionStatut;
-  datePrevue: string | Date | null;
-  dateRealisation: string | Date | null;
-};
-
-type ContactRow = {
-  id: string;
-  prenom: string;
-  nom: string;
-  email: string | null;
-  telephone: string | null;
-  poste: string | null;
-  linkedinUrl: string | null;
-  description: string | null;
-  adresse: string | null;
-  pays: string | null;
-  source: string | null;
-  category: PersonCategory;
-  state: PersonState;
-  companyId: string | null;
+type ContactRow = ContactSheetData & {
   company: { id: string; nom: string } | null;
-  prochaineActionTitre: string | null;
-  prochaineActionDate: string | Date | null;
-  updatedAt: string | Date;
   customFields?: string | Record<string, unknown>;
-  actions?: ActionRow[];
 };
 
 type SavedView = {
@@ -189,7 +158,6 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
   const [customFieldDraft, setCustomFieldDraft] = useState<Record<string, unknown>>({});
   const [selected, setSelected] = useState<ContactRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<"info" | "actions">("info");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -307,7 +275,6 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
     setSelected(data);
     setCustomFieldDraft(getCustomFields(data));
     setCreating(false);
-    setTab("info");
     const params = new URLSearchParams(searchParams.toString());
     params.set("contact", id);
     router.replace(`/contacts?${params.toString()}`);
@@ -348,14 +315,45 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
       actions: [],
     });
     setCustomFieldDraft({});
-    setTab("info");
   }
 
-  async function saveContact(patch: Partial<ContactRow>) {
+  async function saveContact(
+    draft: {
+      prenom: string;
+      nom: string;
+      email: string;
+      telephone: string;
+      poste: string;
+      linkedinUrl: string;
+      description: string;
+      adresse: string;
+      pays: string;
+      source: string;
+      category: PersonCategory;
+      state: PersonState;
+      companyId: string;
+    },
+    fields: Record<string, unknown>,
+  ) {
     if (!selected) return;
     setSaving(true);
     setError("");
-    const payload = { ...selected, ...patch, customFields: customFieldDraft };
+    const payload = {
+      prenom: draft.prenom,
+      nom: draft.nom,
+      email: draft.email || null,
+      telephone: draft.telephone || null,
+      poste: draft.poste || null,
+      linkedinUrl: draft.linkedinUrl || null,
+      description: draft.description || null,
+      adresse: draft.adresse || null,
+      pays: draft.pays || null,
+      source: draft.source || null,
+      category: draft.category,
+      state: draft.state,
+      companyId: draft.companyId || null,
+      customFields: fields,
+    };
     const url = creating || !selected.id ? "/api/contacts" : `/api/contacts/${selected.id}`;
     const res = await fetch(url, {
       method: creating || !selected.id ? "POST" : "PATCH",
@@ -397,17 +395,17 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
     await fetchContacts();
   }
 
-  async function createAction(form: FormData) {
+  async function createAction(input: { channel: string; titre: string; contenu: string; datePrevue: string }) {
     if (!selected?.id) return;
     await fetch("/api/actions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contactId: selected.id,
-        channel: form.get("channel"),
-        titre: form.get("titre"),
-        contenu: form.get("contenu"),
-        datePrevue: form.get("datePrevue") || null,
+        channel: input.channel,
+        titre: input.titre,
+        contenu: input.contenu,
+        datePrevue: input.datePrevue || null,
       }),
     });
     await openContact(selected.id);
@@ -1160,210 +1158,19 @@ export function ContactsWorkspace({ companies }: { companies: CompanyOption[] })
                 {PERSON_STATE_LABELS[selected.state]}
               </span>
             </div>
-            <div className="tabs">
-              <button type="button" className={tab === "info" ? "active" : ""} onClick={() => setTab("info")}>
-                Infos
-              </button>
-              <button
-                type="button"
-                className={tab === "actions" ? "active" : ""}
-                onClick={() => setTab("actions")}
-                disabled={creating || !selected.id}
-              >
-                Actions
-              </button>
-            </div>
-            {error ? <p className="error">{error}</p> : null}
-            {tab === "info" ? (
-              <form
-                className="form-grid"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const form = new FormData(e.currentTarget);
-                  void saveContact({
-                    prenom: String(form.get("prenom") ?? ""),
-                    nom: String(form.get("nom") ?? ""),
-                    email: String(form.get("email") ?? "") || null,
-                    telephone: String(form.get("telephone") ?? "") || null,
-                    poste: String(form.get("poste") ?? "") || null,
-                    linkedinUrl: String(form.get("linkedinUrl") ?? "") || null,
-                    description: String(form.get("description") ?? "") || null,
-                    adresse: String(form.get("adresse") ?? "") || null,
-                    pays: String(form.get("pays") ?? "") || null,
-                    source: String(form.get("source") ?? "") || null,
-                    category: String(form.get("category") ?? "lead") as PersonCategory,
-                    state: String(form.get("state") ?? "new_lead") as PersonState,
-                    companyId: String(form.get("companyId") ?? "") || null,
-                  });
-                }}
-              >
-                <div className="form-row">
-                  <label>
-                    Prénom
-                    <input className="input" name="prenom" defaultValue={selected.prenom} />
-                  </label>
-                  <label>
-                    Nom
-                    <input className="input" name="nom" defaultValue={selected.nom} />
-                  </label>
-                </div>
-                <div className="form-row">
-                  <label>
-                    E-mail
-                    <input className="input" name="email" type="email" defaultValue={selected.email ?? ""} />
-                  </label>
-                  <label>
-                    Téléphone
-                    <input className="input" name="telephone" defaultValue={selected.telephone ?? ""} />
-                  </label>
-                </div>
-                <div className="form-row">
-                  <label>
-                    Catégorie
-                    <select className="select" name="category" defaultValue={selected.category}>
-                      {PERSON_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {PERSON_CATEGORY_LABELS[c]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    État
-                    <select className="select" name="state" defaultValue={selected.state}>
-                      {(Object.keys(PERSON_STATE_LABELS) as PersonState[]).map((s) => (
-                        <option key={s} value={s}>
-                          {PERSON_STATE_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label>
-                  Entreprise
-                  <select className="select" name="companyId" defaultValue={selected.companyId ?? ""}>
-                    <option value="">Aucune</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nom}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Poste
-                  <input className="input" name="poste" defaultValue={selected.poste ?? ""} />
-                </label>
-                <label>
-                  LinkedIn
-                  <input className="input" name="linkedinUrl" defaultValue={selected.linkedinUrl ?? ""} />
-                </label>
-                <div className="form-row">
-                  <label>
-                    Source
-                    <input className="input" name="source" defaultValue={selected.source ?? ""} />
-                  </label>
-                  <label>
-                    Pays
-                    <input className="input" name="pays" defaultValue={selected.pays ?? ""} />
-                  </label>
-                </div>
-                <label>
-                  Adresse
-                  <input className="input" name="adresse" defaultValue={selected.adresse ?? ""} />
-                </label>
-                <label>
-                  Description
-                  <textarea className="textarea" name="description" defaultValue={selected.description ?? ""} />
-                </label>
-                <CustomFieldInputs
-                  columns={customColumns}
-                  values={customFieldDraft}
-                  onChange={(key, value) => setCustomFieldDraft((prev) => ({ ...prev, [key]: value }))}
-                />
-                <button className="btn" disabled={saving} type="submit">
-                  {saving ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </form>
-            ) : (
-              <div className="form-grid">
-                <form
-                  className="form-grid"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void createAction(new FormData(e.currentTarget));
-                    e.currentTarget.reset();
-                  }}
-                >
-                  <div className="form-row">
-                    <label>
-                      Canal
-                      <select className="select" name="channel" defaultValue="note">
-                        {ACTION_CHANNELS.map((c) => (
-                          <option key={c} value={c}>
-                            {ACTION_CHANNEL_LABELS[c]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Date prévue
-                      <input className="input" name="datePrevue" type="datetime-local" />
-                    </label>
-                  </div>
-                  <label>
-                    Titre
-                    <input className="input" name="titre" required />
-                  </label>
-                  <label>
-                    Contenu
-                    <textarea className="textarea" name="contenu" />
-                  </label>
-                  <button className="btn" type="submit">
-                    Ajouter l’action
-                  </button>
-                </form>
-                <div className="actions-list">
-                  {(selected.actions ?? []).length === 0 ? (
-                    <p className="muted">Aucune action.</p>
-                  ) : (
-                    (selected.actions ?? []).map((action) => (
-                      <article className="action-item" key={action.id}>
-                        <header>
-                          <div>
-                            <strong>{action.titre}</strong>
-                            <p className="muted" style={{ margin: "4px 0 0" }}>
-                              {ACTION_CHANNEL_LABELS[action.channel]} · {formatDateTime(action.datePrevue)}
-                            </p>
-                          </div>
-                          <span className="badge badge-gray">{ACTION_STATUT_LABELS[action.statut]}</span>
-                        </header>
-                        {action.contenu ? <p style={{ marginTop: 0 }}>{action.contenu}</p> : null}
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {action.statut !== "termine" ? (
-                            <button
-                              className="btn secondary small"
-                              type="button"
-                              onClick={() => void setActionStatut(action.id, "termine")}
-                            >
-                              Terminer
-                            </button>
-                          ) : (
-                            <button
-                              className="btn secondary small"
-                              type="button"
-                              onClick={() => void setActionStatut(action.id, "a_faire")}
-                            >
-                              Réouvrir
-                            </button>
-                          )}
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+            <ContactSheet
+              contact={selected}
+              creating={creating || !selected.id}
+              companies={companies}
+              customColumns={customColumns}
+              customFields={customFieldDraft}
+              onCustomFields={setCustomFieldDraft}
+              saving={saving}
+              error={error}
+              onSave={(draft, fields) => void saveContact(draft, fields)}
+              onCreateAction={(input) => void createAction(input)}
+              onSetStatut={(actionId, statut) => void setActionStatut(actionId, statut)}
+            />
           </>
         ) : null}
       </SidePeek>
